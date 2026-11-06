@@ -117,6 +117,7 @@
           <button class="chip btn-chip" id="snd" type="button">${s.sound !== false ? 'Ton an' : 'Ton aus'}</button></div>
         </header>
         <div class="scroller" id="scroller">
+          ${(() => { const dn = this.dailyNight(); const dd = s.daily && s.daily.date === dn.daily ? s.daily : null; return `<section class="daily"><div><span class="eyebrow">Heute · ${dn.daily}</span><h2>Tagesservice</h2><p>Spezial: <b>${esc(dn.special.name)}</b> · ${dn.mods.map((m) => G.MODS[m].name).join(' + ')}</p>${dd ? `<p class="sub">Heute: ${dd.best} Punkte · Bonus kassiert</p>` : '<p class="sub">Erster Abend heute: +300 € Bonus</p>'}</div><button type="button" class="buy" id="daily">${dd ? 'Nochmal' : 'Spielen'}</button></section>`; })()}
           ${chapters}
           <section class="chapter legend ${legendOpen ? '' : 'closed'}" style="--cc:#e8c46a">
             <header><span class="eyebrow">Endlos</span><h2>Legenden-Service</h2><p>Kein Ende, nur Druck. Wie lange hältst du?</p><span class="chstars">Rekord: ${s.legend || 0}</span></header>
@@ -128,13 +129,27 @@
           <button type="button" class="nav-btn primary" id="play">Nächster Abend</button>
         </nav>`, 'map');
       el.querySelectorAll('[data-ch]').forEach((b) => (b.onclick = () => { G.Audio.init(); G.Audio.tap(); this.briefing(+b.dataset.ch, +b.dataset.i); }));
+      el.querySelector('#daily').onclick = () => { G.Audio.init(); G.Audio.tap(); this.briefing(0, 98); };
       const lg = el.querySelector('[data-legend]'); if (lg && legendOpen) lg.onclick = () => this.briefing(3, 99);
       el.querySelector('#shop').onclick = () => { G.Audio.init(); G.Audio.tap(); this.shop(); };
       el.querySelector('#snd').onclick = () => { s.sound = s.sound === false; G.Audio.setOn(s.sound !== false); this.persist(); this.map(); };
       const next = this.nextNight();
       el.querySelector('#play').onclick = () => { G.Audio.init(); G.Audio.tap(); this.briefing(next.ch, next.i); };
       const cur = el.querySelector('.node.cur') || el.querySelector(`#ch${scrollTo ?? next.ch}`);
-      if (cur) setTimeout(() => cur.scrollIntoView({ block: 'center' }), 30);
+      if (cur) setTimeout(() => cur.scrollIntoView({ block: 'nearest' }), 30);
+    },
+
+    today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; },
+    dailyNight() {
+      const day = this.today();
+      let h = 0; for (const ch of day) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      let maxCh = 0; this.save.awards.forEach((a, i) => { if (a) maxCh = Math.min(3, i + 1); });
+      const base = G.night(maxCh, 3);
+      const mods = Object.keys(G.MODS);
+      const m1 = mods[h % mods.length], m2 = mods[(h >> 4) % mods.length];
+      const pool = G.DISHES.filter((d) => d.ch <= maxCh);
+      const star = pool[(h >> 8) % pool.length];
+      return { ...base, i: 98, daily: day, title: 'Tagesservice', mods: [...new Set([m1, m2])], dishes: [star, star, ...pool], dur: 150, special: star };
     },
 
     nextNight() {
@@ -145,16 +160,17 @@
     /* ---------- Briefing ---------- */
     briefing(ch, i) {
       const legend = i === 99;
-      const nt = legend ? this.legendNight() : G.night(ch, i);
-      const best = legend ? this.save.legend || 0 : (this.save.nights[key(ch, i)] || {}).best || 0;
+      const daily = i === 98;
+      const nt = legend ? this.legendNight() : daily ? this.dailyNight() : G.night(ch, i);
+      const best = legend ? this.save.legend || 0 : daily ? ((this.save.daily && this.save.daily.date === nt.daily && this.save.daily.best) || 0) : (this.save.nights[key(ch, i)] || {}).best || 0;
       const el = this.screen(`
         <div class="brief">
-          <span class="eyebrow">${legend ? 'Legenden-Service' : `Kapitel ${ch + 1} · ${G.CHAPTERS[ch].name}`}</span>
+          <span class="eyebrow">${legend ? 'Legenden-Service' : daily ? `Heute · ${nt.daily}` : `Kapitel ${ch + 1} · ${G.CHAPTERS[ch].name}`}</span>
           <h2>${nt.boss ? 'Inspektoren-Abend' : legend ? 'Kein Ende in Sicht' : nt.title}</h2>
           ${nt.boss ? `<p class="boss-text">Heute isst jemand vom Guide Céleste bei dir. Tisch 9, allein, drei Gänge. Schnitt ab <b>${80 + ch * 3}</b> und kein Gang darf zu spät kommen – dann gibt es <b>${G.CHAPTERS[ch].award}</b>.</p>` : ''}
           ${nt.mods.length ? `<div class="mods">${nt.mods.map((m) => `<div class="mod"><b>${G.MODS[m].name}</b><span>${G.MODS[m].text}</span></div>`).join('')}</div>` : ''}
           <span class="eyebrow">Auf der Karte</span>
-          <div class="dishes">${nt.dishes.map((d) => `<span class="dish-chip">${d.items.map((x) => `<i style="background:${G.ITEMS[x].col}"></i>`).join('')}${esc(d.name)}</span>`).join('')}</div>
+          <div class="dishes">${[...new Set(nt.dishes)].map((d) => `<span class="dish-chip">${d.items.map((x) => `<i style="background:${G.ITEMS[x].col}"></i>`).join('')}${esc(d.name)}</span>`).join('')}</div>
           <span class="eyebrow">Linie</span>
           <div class="dishes">${nt.stations.map((sid) => `<span class="st-chip"><b>${G.STATIONS[sid].name}</b><small>${G.STATIONS[sid].hint}</small></span>`).join('')}</div>
           <p class="sub">${best ? `Bestwert: ${best}` : 'Noch nie gekocht.'} · Service ca. ${Math.round(nt.dur / 60 * 10) / 10} Minuten</p>
@@ -213,10 +229,15 @@
     results(res, nt, ch, i) {
       const s = this.save;
       const legend = !!nt.legend;
-      const tips = Math.round(res.score / 8 * (1 + 0.15 * (s.up.salon || 0)));
+      const daily = !!nt.daily;
+      let tips = Math.round(res.score / 8 * (1 + 0.15 * (s.up.salon || 0)));
+      let bonus = 0;
+      if (daily && !(s.daily && s.daily.date === nt.daily)) { bonus = 300 + res.stars * 100; s.daily = { date: nt.daily, best: 0 }; }
+      tips += bonus;
       s.money += tips;
       let newBest = false;
       if (legend) { if (res.score > (s.legend || 0)) { s.legend = res.score; newBest = true; } }
+      else if (daily) { if (res.score > s.daily.best) { s.daily.best = res.score; newBest = true; } }
       else {
         const k = key(ch, i);
         const prev = s.nights[k] || { stars: 0, best: 0 };
@@ -232,7 +253,7 @@
       const review = G.REVIEWS[shownStars][Math.floor(Math.random() * G.REVIEWS[shownStars].length)];
       const el = this.screen(`
         <div class="results">
-          <span class="eyebrow">${legend ? 'Legenden-Service' : nt.title} · Küche ist durch</span>
+          <span class="eyebrow">${legend ? 'Legenden-Service' : nt.title} · Küche ist durch${bonus ? ` · Tagesbonus +${eur(bonus)}` : ''}</span>
           <div class="bigstars">${[0, 1, 2].map((k) => `<i class="${k < shownStars ? 'on' : ''}" style="animation-delay:${0.3 + k * 0.45}s">★</i>`).join('')}</div>
           <div class="score"><b id="cnt">0</b><span>Punkte${newBest ? ' · <em>Neuer Rekord!</em>' : ''}</span></div>
           ${nt.boss ? `<div class="insp-res ${res.inspPassed ? 'ok' : 'no'}"><b>${res.inspPassed ? 'Der Einzelgast an Tisch 9 hat gelächelt.' : 'Der Einzelgast an Tisch 9 war nicht überzeugt.'}</b><span>Schnitt seiner Teller: ${res.inspAvg} (nötig: ${res.inspNeed})${res.inspPassed ? '' : ' · Probier es nochmal.'}</span></div>` : ''}
@@ -258,7 +279,7 @@
       requestAnimationFrame(up);
       for (let k = 0; k < shownStars; k++) setTimeout(() => G.Audio.star(k), 300 + k * 450);
       if (newBest) setTimeout(() => G.Audio.coin(), 1200);
-      el.querySelector('#again').onclick = () => (legend ? this.briefing(3, 99) : this.briefing(ch, i));
+      el.querySelector('#again').onclick = () => (legend ? this.briefing(3, 99) : daily ? this.briefing(0, 98) : this.briefing(ch, i));
       el.querySelector('#next').onclick = () => (awardNow ? this.ceremony(ch) : this.map(ch));
     },
 

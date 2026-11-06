@@ -271,8 +271,12 @@
       let pts = Math.round(tk.dish.value * (q / 100) * timeF * mult * (tk.blogger ? 2 : 1));
       if (tk.vip && q < 90) { pts = Math.round(pts * 0.4); this.pop('Herr B. ist beleidigt', this.w / 2, this.pass.y - 20, C.bad, 1); this.addStress(8); }
       if (tk.insp) this.insp.qs.push(q);
+      const thNow = [0.5, 0.9, 1.3].map((f) => (this.sumValue || 1) * f);
+      const before = thNow.filter((x) => this.score >= x).length;
       this.score += pts;
       this.served++;
+      const after = thNow.filter((x) => this.score >= x).length;
+      if (after > before && !this.night.legend) { setTimeout(() => { this.callout(`${'★'.repeat(after)} ${['', 'Erster', 'Zweiter', 'Dritter'][after]} Stern!`, C.gold, 1.6); G.Audio.star(after - 1); for (let i = 0; i < 40; i++) this.part(this.w / 2, this.hud.y + this.hud.h, 'confetti'); }, 500); }
       this.addStress(q >= 90 ? -9 : q >= 75 ? -4 : 2);
       const slot = this.slotR[tk.slot];
       this.flyers.push({ serve: true, tkObj: tk, x0: slot.x, y0: slot.y, x1: this.w + 80, y1: slot.y - 120, t: 0 });

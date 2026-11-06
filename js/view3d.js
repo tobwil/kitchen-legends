@@ -281,7 +281,8 @@
       this.scene = scene;
       this.cam = new T.PerspectiveCamera(32, 1, 0.1, 400);
       const cx = this.W / 2, cz = this.H / 2;
-      const dist = Math.max(this.W, this.H) * (this.city ? 1.75 : 1.85);
+      const asp = (this.host.clientWidth || 1) / Math.max(1, this.host.clientHeight || 1);
+      const dist = Math.max(this.W, this.H) * (this.city ? 1.75 : 1.85) * (asp > 2 ? 0.72 : 1);
       this.cam.position.set(cx + dist * 0.62, dist * 0.78, cz + dist * 0.62);
       if (T.OrbitControls) {
         const c = new T.OrbitControls(this.cam, r.domElement);
@@ -443,7 +444,7 @@
       fm.rotation.x = -Math.PI / 2; fm.position.set(W / 2, 0, H / 2); fm.receiveShadow = true;
       grp.add(fm);
       // Außenboden (Hof/Gehweg) für Tiefe
-      const out = new T.Mesh(new T.PlaneGeometry(W + 30, H + 30), mat('#b8ad9a', { rough: 1 }));
+      const out = new T.Mesh(new T.PlaneGeometry(W + 30, H + 30), mat('#8a8070', { rough: 1 }));
       out.rotation.x = -Math.PI / 2; out.position.set(W / 2, -0.02, H / 2); out.receiveShadow = true;
       grp.add(out);
       const WH = 2.3, TH = 0.18;
@@ -529,7 +530,7 @@
           const ring = new T.Mesh(new T.TorusGeometry(0.32, 0.025, 6, 20), mat('#c9a45c', { metal: 0.7, rough: 0.3 }));
           ring.rotation.x = Math.PI / 2; ring.position.set(cx, 1.85, dz); grp.add(ring);
           for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; this.themeShades.push(ball(grp, cx + Math.cos(a) * 0.32, 1.9, dz + Math.sin(a) * 0.32, 0.04, '#fff2d0', { emissive: 0xffd08a, ei: 0, cast: false, detail: 0 })); }
-          const l = new T.PointLight(0xffd08a, 0, 6, 2); l.position.set(cx, 1.7, dz); this.scene.add(l); this.themeLights.push(l);
+          const l = new T.PointLight(0xffb868, 0, 7.5, 2); l.position.set(cx, 1.7, dz); this.scene.add(l); this.themeLights.push(l);
         });
       } else if (th === 'industrie') {
         const brick = canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#8a3e2c'; c.fillRect(0, 0, w, h); for (let yy = 0; yy < h; yy += 16) for (let xx = -16; xx < w; xx += 32) { c.fillStyle = ['#9a4a34', '#a85a40', '#8c4232'][(xx + yy) % 3 === 0 ? 0 : (yy / 16) % 2 ? 1 : 2]; c.fillRect(xx + ((yy / 16) % 2) * 16 + 1, yy + 1, 30, 14); } });
@@ -553,6 +554,8 @@
       this.flames = []; this.passLamps = []; this.shades = []; this.fireSpots = []; this.smokeSpots = []; this.burners = [];
       this.lights.forEach((l) => this.scene.remove(l));
       this.lights = [];
+      (this.candles || []).forEach((l) => this.scene.remove(l));
+      this.candles = [];
       this.tablePos = new Map();
       s.layout.forEach((it) => {
         const m = furniture(it, style);
@@ -564,7 +567,10 @@
         if (m.userData.shade) this.shades.push(m.userData.shade);
         if (m.userData.fire) this.fireSpots.push([it.x + 0.5, it.y + 0.9]);
         if (m.userData.smoke) this.smokeSpots.push([it.x + 0.5, it.y + 0.5]);
-        if (f.seats) this.tablePos.set(it.id, { x: it.x + f.w / 2, z: it.y + 0.5, w: f.w });
+        if (f.seats) {
+          this.tablePos.set(it.id, { x: it.x + f.w / 2, z: it.y + 0.5, w: f.w });
+          if (this.candles.length < 10) { const l = new T.PointLight(0xff9038, 0, 2.6, 2); l.position.set(it.x + f.w / 2, 0.75, it.y + 0.5); this.scene.add(l); this.candles.push(l); }
+        }
         if (it.type === 'lampe' && this.lights.length < 6) { const l = new T.PointLight(0xffc988, 0, 4, 2); l.position.set(it.x + 0.5, 1.35, it.y + 0.5); this.scene.add(l); this.lights.push(l); }
         if (it.type === 'pass') { const l = new T.PointLight(0xff7a2a, 0, 3.2, 2); l.position.set(it.x + 1, 1.2, it.y + 0.5); this.scene.add(l); this.lights.push(l); this.passLight = l; }
       });
@@ -674,12 +680,13 @@
     /* --- Licht nach Tageszeit --- */
     applyLight(tod) {
       const L = KL.todPreset(tod);
-      const sky = lerpC(L.skyTop, L.skyBot, 0.55);
+      const day = clamp(1 - (tod - 0.55) / 0.35, 0, 1);
+      // Nachts fast schwarzblau draußen, damit das warme Licht drinnen trägt
+      const sky = lerpC(lerpC(L.skyTop, L.skyBot, 0.55).getStyle(), '#06080e', (1 - day) * 0.75);
       this.scene.background = sky;
       this.scene.fog = new T.Fog(sky, 30, this.city ? 70 : 60);
-      const day = clamp(1 - (tod - 0.55) / 0.35, 0, 1);
       this.sun.color = new T.Color(L.sun);
-      this.sun.intensity = 0.15 + 2.4 * day;
+      this.sun.intensity = 0.03 + 2.4 * day;
       // Sonne tief von links (durch die Fenster), wandert mit der Zeit nach unten
       const elev = 0.25 + 0.55 * (1 - clamp(tod / 0.7, 0, 1));
       const cx = this.W / 2, cz = this.H / 2;
@@ -687,9 +694,10 @@
       this.sun.position.set(cx + Math.cos(az) * 30, Math.sin(elev) * 30 + 2, cz + Math.sin(az) * 12 + (this.city ? -10 : 4));
       this.hemi.color = lerpC('#cfe2ff', '#3a4680', 1 - day);
       this.hemi.groundColor = lerpC('#7a5a3d', '#1d2244', 1 - day);
-      this.hemi.intensity = 0.35 + 0.35 * day;
+      this.hemi.intensity = 0.07 + 0.6 * day;
       this.lampLevel = clamp(L.lamps, 0, 1);
-      this.r.toneMappingExposure = 0.95 + 0.25 * (1 - day);
+      this.day = day;
+      this.r.toneMappingExposure = 1.0 + 0.15 * (1 - day);
     }
 
     /* --- Pro Frame --- */
@@ -701,13 +709,14 @@
       if (!this.city) {
         this.syncFurniture();
         const lv = Math.max(lamps, styleLight ? 0.45 : 0);
-        this.lights.forEach((l) => (l.intensity = l === this.passLight ? 1.2 + lv * 1.5 : lv * 2.2));
-        this.themeLights.forEach((l) => (l.intensity = 0.4 + lv * 2.4));
+        this.lights.forEach((l) => (l.intensity = l === this.passLight ? 1.2 + lv * 2.2 : lv * 3.2));
+        this.candles.forEach((l, i) => (l.intensity = lamps * (1.6 + Math.sin(w.t * 9 + i * 1.7) * 0.18 + Math.sin(w.t * 23 + i) * 0.08)));
+        this.themeLights.forEach((l) => { l.intensity = 0.3 + lv * 4.5; l.distance = 7.5; });
         this.themeShades.forEach((m) => (m.material.emissiveIntensity = 0.5 + lv * 2));
-        this.warm.intensity = lv * 1.3;
-        this.flames.forEach((f, i) => { f.scale.setScalar(0.8 + Math.sin(w.t * 12 + i) * 0.15); f.material.emissiveIntensity = 0.6 + lv * 2.4; });
+        this.warm.intensity = 0.12 * lv * (this.day ?? 1);
+        this.flames.forEach((f, i) => { f.scale.setScalar(0.8 + Math.sin(w.t * 12 + i) * 0.15); f.material.emissiveIntensity = 0.6 + lamps * 4; });
         this.shades.forEach((m) => (m.material.emissiveIntensity = lv * 1.4));
-        this.windows.forEach((g) => (g.material.emissiveIntensity = lamps * 0.6));
+        this.windows.forEach((g) => { g.material.emissive.set(0x0c1a3a); g.material.emissiveIntensity = lamps * 0.5; });
         this.passLamps.forEach((m) => (m.material.emissiveIntensity = 0.8 + Math.sin(w.t * 3) * 0.1));
         if (this.sign) { this.sign.material.emissive = new T.Color(0xffffff); this.sign.material.emissiveMap = this.sign.material.map; this.sign.material.emissiveIntensity = lamps * 0.7; }
         // Teller auf Tischen und am Pass

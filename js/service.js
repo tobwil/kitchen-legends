@@ -138,6 +138,7 @@
       this.tickets.push(tk);
       this.sumValue += dish.value * (tk.blogger ? 2 : 1);
       G.Audio.printer();
+      if (this.rail) this.pop(`Tisch ${table} – ça marche!`, this.w / 2, this.rail.y + this.rail.h + 14, o.insp ? C.gold : 'rgba(235,229,217,0.85)', 0.75);
       return tk;
     }
 
@@ -371,7 +372,7 @@
       this.pointer = null;
     }
 
-    plateGeom() { const r = Math.min(this.w * 0.4, this.h * 0.26); return { x: this.w / 2, y: this.h * 0.44, r }; }
+    plateGeom() { const r = Math.min(this.w * 0.36, this.h * 0.215); return { x: this.w / 2, y: this.h * 0.5, r }; }
 
     platingDown(x, y) {
       const pl = this.plating, g = this.plateGeom();
@@ -467,6 +468,7 @@
       // Ereignisse
       this.events.forEach((ev) => { if (!ev.done && t >= ev.at) { ev.done = true; ev.fn(); } });
       // Neue Bons
+      if (!frozen && !this.lastCall && t >= nt.dur - 14 && !nt.legend) { this.lastCall = true; this.callout('Letzte Bestellungen!', C.gold, 1.6); }
       if (!frozen && t < nt.dur - 14) {
         this.spawnT -= dt;
         const maxOpen = this.slots.length + 4;
@@ -664,7 +666,7 @@
       });
       c.font = font('callout', 22 * U); c.fillStyle = C.ink; c.textAlign = 'left';
       c.fillText(String(this.score), bx, h.y + 9 * U);
-      if (this.combo >= 2) { c.font = font('callout', 16 * U); c.fillStyle = C.heat; c.textAlign = 'right'; c.fillText(`FLOW ×${this.combo}`, bx + bw, h.y + 9 * U); }
+      if (this.combo >= 2) { const sw = c.measureText(String(this.score)).width; c.font = font('callout', 16 * U); c.fillStyle = C.heat; c.textAlign = 'left'; c.fillText(`FLOW ×${this.combo}`, bx + sw + 10 * U, h.y + 11 * U); }
       // Druck
       const sx = h.x, sy = h.y + h.h + 2, sw = h.w;
       c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(sx, sy, sw, 3 * U);
@@ -678,8 +680,21 @@
       c.fillRect(this.pauseR.x + 22 * U, this.pauseR.y + 11 * U, 4 * U, 16 * U);
     }
 
+    tilePattern() {
+      if (this._tiles) return this._tiles;
+      const t = document.createElement('canvas');
+      t.width = 48; t.height = 24;
+      const g = t.getContext('2d');
+      g.fillStyle = '#1b2025'; g.fillRect(0, 0, 48, 24);
+      g.fillStyle = '#20262b'; g.fillRect(1, 1, 22, 10); g.fillRect(25, 1, 22, 10); g.fillRect(13, 13, 22, 10); g.fillRect(-11, 13, 22, 10); g.fillRect(37, 13, 22, 10);
+      g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(1, 1, 22, 2); g.fillRect(25, 1, 22, 2); g.fillRect(13, 13, 22, 2);
+      this._tiles = this.ctx.createPattern(t, 'repeat');
+      return this._tiles;
+    }
+
     drawRail() {
       const c = this.ctx, U = this.U, r = this.rail;
+      c.save(); c.fillStyle = this.tilePattern(); c.globalAlpha = 0.9; c.fillRect(0, r.y - 4, this.w, r.h + 8); c.restore();
       // Schiene
       const g = c.createLinearGradient(0, r.y, 0, r.y + 8 * U);
       g.addColorStop(0, '#6a747c'); g.addColorStop(1, '#2b3238');
@@ -744,7 +759,14 @@
       g.addColorStop(0, C.tile2); g.addColorStop(1, C.tile);
       c.fillStyle = g; this.rr(r.x, r.y, r.w, r.h, 14 * U); c.fill();
       const busy = s.state !== 'idle';
-      c.strokeStyle = s.state === 'burnt' ? C.bad : busy ? 'rgba(255,107,31,0.55)' : C.line; c.lineWidth = busy ? 2 : 1; c.stroke();
+      const needed = !busy && this.tickets.some((t) => t.slot !== null && t.items.some((it) => !it.done && !it.cooking && G.ITEMS[it.id].st === s.id));
+      c.strokeStyle = s.state === 'burnt' ? C.bad : busy ? 'rgba(255,107,31,0.55)' : needed ? `rgba(232,196,106,${0.45 + Math.sin(this.rt * 6) * 0.35})` : C.line;
+      c.lineWidth = busy || needed ? 2.5 : 1; c.stroke();
+      if (needed) {
+        c.fillStyle = C.gold; this.rr(r.x + 10, r.y + 10, 52 * U, 20 * U, 10 * U); c.fill();
+        c.fillStyle = '#2a1a05'; c.font = font('callout', 13 * U); c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('BON!', r.x + 10 + 26 * U, r.y + 10 + 10.5 * U);
+      }
       const cx = r.x + r.w / 2, cy = r.y + r.h * 0.46;
       const size = Math.min(r.w * 0.42, r.h * 0.36);
       // Kochgeschirr
@@ -1071,7 +1093,7 @@
       const c = this.ctx, U = this.U, pl = this.plating;
       const tk = this.ticket(pl.tk);
       if (!tk) return;
-      c.fillStyle = 'rgba(8,10,12,0.72)'; c.fillRect(0, 0, this.w, this.h);
+      c.fillStyle = 'rgba(8,10,12,0.62)'; c.fillRect(0, 0, this.w, this.h);
       const g = this.plateGeom();
       c.textAlign = 'center'; c.textBaseline = 'middle';
       c.font = font('dish', 22 * U); c.fillStyle = C.ink;
@@ -1097,13 +1119,13 @@
         c.fillStyle = tl < 0.3 ? C.bad : C.heat; c.fillRect(g.x - 80 * U, g.y + g.r + 56 * U, 160 * U * tl, 5 * U);
       } else {
         // Glocke
-        const by = g.y + g.r + 70 * U, br = 42 * U * (1 + Math.sin(this.t * 9) * 0.04);
+        const by = g.y + g.r + 58 * U, br = 38 * U * (1 + Math.sin(this.rt * 9) * 0.04);
         const bg = c.createRadialGradient(g.x - br * 0.3, by - br * 0.4, 4, g.x, by, br);
         bg.addColorStop(0, '#fff1c4'); bg.addColorStop(0.5, C.gold); bg.addColorStop(1, '#8a6a20');
         c.fillStyle = bg; c.beginPath(); c.arc(g.x, by, br, Math.PI, 0); c.lineTo(g.x + br * 1.15, by + 8 * U); c.lineTo(g.x - br * 1.15, by + 8 * U); c.closePath(); c.fill();
         c.fillStyle = '#5a4410'; c.beginPath(); c.arc(g.x, by - br - 4 * U, 7 * U, 0, 7); c.fill();
         c.font = font('callout', 30 * U); c.lineWidth = 6; c.strokeStyle = '#000';
-        c.strokeText('SERVICE!', g.x, by + 40 * U); c.fillStyle = '#fff'; c.fillText('SERVICE!', g.x, by + 40 * U);
+        c.strokeText('SERVICE!', g.x, by + 34 * U); c.fillStyle = '#fff'; c.fillText('SERVICE!', g.x, by + 34 * U);
         c.font = font('mono', 11 * U); c.fillStyle = C.muted;
         c.fillText(`ANRICHTEN ${pl.score} / 100`, g.x, g.y - g.r - 70 * U);
       }

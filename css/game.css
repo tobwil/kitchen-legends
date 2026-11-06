@@ -22,6 +22,9 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+input { -webkit-user-select: text; user-select: text; }
 html, body { height: 100%; margin: 0; overflow: hidden; background: var(--steel); color: var(--ink); font: 15px/1.45 var(--f-body); overscroll-behavior: none; }
 body { background: var(--steel); }
 button { font: inherit; color: inherit; touch-action: manipulation; }
@@ -149,7 +152,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .results .ghost-btn { flex: 1; }
 
 /* Verleihung */
-.ceremony { justify-content: center; align-items: center; background: radial-gradient(70% 50% at 50% 40%, rgba(232, 196, 106, 0.16), transparent 70%), #07080a; overflow: hidden; }
+.ceremony { justify-content: center; align-items: center; overflow-y: auto; background: radial-gradient(70% 50% at 50% 40%, rgba(232, 196, 106, 0.16), transparent 70%), #07080a; overflow: hidden; }
 .phone-stage, .reveal { position: relative; z-index: 2; display: grid; gap: 22px; justify-items: center; text-align: center; padding: 20px; }
 .phone { width: 220px; aspect-ratio: 9 / 17; max-width: 70vw; border-radius: 34px; border: 3px solid var(--line); background: linear-gradient(#171c21, #0d1013); display: grid; place-content: center; gap: 6px; position: relative; animation: buzz 1.1s infinite; }
 .phone b { font: italic 700 1.4rem var(--f-dish); }

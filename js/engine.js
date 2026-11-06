@@ -107,7 +107,7 @@
   KL.checkQuests = function (s) {
     const done = [];
     KL.QUESTS.forEach((q) => {
-      if (!s.quests.includes(q.id) && q.check(s)) { s.quests.push(q.id); KL.gainXP(s, q.xp); done.push(q); }
+      if (!s.quests.includes(q.id) && q.check(s)) { s.quests.push(q.id); KL.gainXP(s, q.xp); if (q.reward) q.reward(s); done.push(q); }
     });
     return done;
   };

@@ -74,6 +74,7 @@
     const saved = fresh ? null : (hotData && hotData.state) || KL.load();
     if (saved && saved.v === 2 && !saved.gameOver) {
       if (!saved.layout) KL.initLayout(saved);
+      if (!saved.layout.some((i) => i.type === 'buero')) { if (!KL.canPlace(saved, 'buero', 0, 2)) saved.layout.push({ id: 'buero', type: 'buero', x: 0, y: 2 }); else KL.autoPlace(saved, 'buero'); }
       KL.UI.mount(saved);
       if (saved.ceremony) KL.UI.showCeremony(saved.ceremony, () => { saved.ceremony = null; KL.save(saved); KL.UI.render(); });
     } else {

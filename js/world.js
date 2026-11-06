@@ -24,6 +24,7 @@
     weinregal: { name: 'Weinregal', zone: 'dining', w: 1, d: 1, cost: 900, amb: 3, wine: 3 },
     bar: { name: 'Bar-Tresen', zone: 'dining', w: 2, d: 1, cost: 2500, amb: 3, extras: 4 },
     pass: { name: 'Pass mit Wärmelampen', zone: 'kitchen', w: 2, d: 1, cost: 0, fixed: true },
+    buero: { name: 'Büro-Ecke', zone: 'kitchen', w: 1, d: 1, cost: 0, fixed: true },
     herd: { name: 'Herdblock', zone: 'kitchen', w: 2, d: 1, cost: 3000, stations: 2, minOne: true },
     spuele: { name: 'Spülstation', zone: 'kitchen', w: 1, d: 1, cost: 1200, minOne: true },
     posten: { name: 'Arbeitsposten', zone: 'kitchen', w: 1, d: 1, cost: 900, stations: 1 },
@@ -51,6 +52,8 @@
   };
   KL.occupancy = occ;
 
+  // Durchgang zwischen Küche und Gastraum, rechts neben dem Pass
+  KL.kitchenGap = (s) => { const p = s.layout.find((i) => i.type === 'pass'); const g = KL.GRID[s.location]; return p.x + 2 < g.w ? p.x + 2 : p.x - 1; };
   KL.doorTile = (s) => { const g = KL.GRID[s.location]; return { x: g.w - 1, y: g.h - 1 }; };
   KL.passItem = (s) => s.layout.find((i) => i.type === 'pass');
   KL.passTile = (s) => { const p = KL.passItem(s); return { x: p.x, y: p.y + 1 }; };
@@ -59,7 +62,9 @@
   KL.bfs = function (s, from, zone, m) {
     m = m || occ(s);
     const g = KL.GRID[s.location];
-    const inZone = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h && (zone === 'kitchen' ? y < KL.KITCHEN_ROWS : y >= KL.KITCHEN_ROWS);
+    const inZone = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h && (zone === 'all' || (zone === 'kitchen' ? y < KL.KITCHEN_ROWS : y >= KL.KITCHEN_ROWS));
+    const gap = zone === 'all' ? KL.kitchenGap(s) : -1;
+    const openKitchen = s.interior.includes('kueche');
     const key = (x, y) => y * g.w + x;
     const prev = new Map([[key(from.x, from.y), null]]);
     const q = [from];
@@ -68,6 +73,8 @@
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = c.x + dx, ny = c.y + dy;
         if (!inZone(nx, ny) || m[ny][nx] || prev.has(key(nx, ny))) continue;
+        // Zwischen Küche und Gastraum nur durch den Durchgang
+        if (zone === 'all' && dy !== 0 && Math.min(c.y, ny) === KL.KITCHEN_ROWS - 1 && !openKitchen && nx !== gap) continue;
         prev.set(key(nx, ny), c);
         q.push({ x: nx, y: ny });
       }
@@ -100,6 +107,8 @@
     const dining = KL.bfs(s, door, 'dining', m);
     const pt = KL.passTile(s);
     if (m[pt.y] && m[pt.y][pt.x]) return 'Vor dem Pass muss ein Gang frei bleiben.';
+    const gap = KL.kitchenGap(s);
+    if (m[KL.KITCHEN_ROWS - 1][gap] || m[KL.KITCHEN_ROWS][gap]) return 'Der Durchgang zur Küche muss frei bleiben.';
     if (!dining.reach(pt.x, pt.y)) return 'Der Service kommt nicht mehr vom Pass zum Eingang.';
     for (const it of s.layout) {
       const f = KL.FURN[it.type];
@@ -133,6 +142,7 @@
       { id: KL.util.uid(), type: 'herd', x: 1, y: 0 },
       { id: KL.util.uid(), type: 'spuele', x: g.w - 1, y: 0 },
       { id: KL.util.uid(), type: 'posten', x: 4, y: 0 },
+      { id: 'buero', type: 'buero', x: 0, y: 2 },
     ];
     s.equipment.forEach((eq) => {
       const type = Object.keys(KL.FURN).find((k) => KL.FURN[k].eq === eq);
@@ -327,8 +337,11 @@
       const from = { x: clamp(Math.floor(a.x), 0, this.g.w - 1), y: clamp(Math.floor(a.y), 0, this.g.h - 1) };
       const r = KL.bfs(this.s, from, zone, m);
       const p = r.path(tx, ty);
+      if (!p && a.kind === 'chef') return false;
       a.path = p ? p.slice(1).map((c) => ({ x: c.x + 0.5, y: c.y + 0.5 })) : [{ x: tx + 0.5, y: ty + 0.5 }];
       a.done = done || null;
+      if (p && p.length === 1 && a.done) { const f2 = a.done; a.done = null; f2(a); }
+      return true;
     }
 
     stepAgent(a, dt) {
@@ -481,7 +494,7 @@
       const pass = KL.passItem(s);
       if (!style.open) {
         for (let x = 0; x < g.w; x++) {
-          if (x >= pass.x && x < pass.x + 2) continue;
+          if ((x >= pass.x && x < pass.x + 2) || x === KL.kitchenGap(s)) continue;
           this.box(x, KL.KITCHEN_ROWS - 0.08, 1, 0.08, 0, 0.9, '#59636b', '#3d454c', '#4a535a');
         }
       } else {
@@ -687,6 +700,16 @@
             this.ctx.textAlign = 'center';
             this.ctx.fillText(it.num || '', nx, ny);
           }
+          break;
+        }
+        case 'buero': {
+          this.box(x + 0.1, y + 0.15, 0.8, 0.7, 0, 0.75, '#6b4a33', '#4f3524', '#5f412d');
+          this.box(x + 0.25, y + 0.3, 0.45, 0.3, 0.75, 0.04, '#2a2a2a', '#1d1d1d', '#252525');
+          this.box(x + 0.25, y + 0.28, 0.45, 0.04, 0.79, 0.32, '#3a4a5a', '#1d1d1d', '#2a3a4a');
+          const [lx, ly] = this.P(x + 0.47, y + 0.3, 0.95);
+          this.ctx.fillStyle = 'rgba(140,200,255,0.5)'; this.ctx.fillRect(lx - this.TW * 0.08, ly - this.TW * 0.05, this.TW * 0.16, this.TW * 0.1);
+          // Papierstapel
+          this.box(x + 0.7, y + 0.6, 0.15, 0.2, 0.75, 0.12, '#f2ead9', '#d9cdb5', '#e8dcc4');
           break;
         }
         case 'pflanze':

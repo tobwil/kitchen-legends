@@ -27,6 +27,8 @@
     s: null,
     tab: 'restaurant',
     build: { on: false, type: null, moving: null, sel: null },
+    scene: 'restaurant',
+    playerPos: {},
     lab: { product: 'saibling', technique: 'gebeizt', accent: 'fichte', texture: 'chip' },
 
     mount(state) {
@@ -66,20 +68,7 @@
       this.f = f;
       const wiy = KL.weekOfYear(s);
       app.innerHTML = `
-        <header class="topbar">
-          <div class="brand">
-            <span class="eyebrow">${esc(s.chef.name)} · ${esc(KL.byId(KL.LOCATIONS, s.location).name)}</span>
-            <h1>${esc(s.name)} ${starGlyphs(s.stars)}${s.green ? '<span class="green-star" title="Grüner Stern">✦</span>' : ''}</h1>
-            <button type="button" class="lvl" data-tab-go="chef" title="Charakter öffnen">Level ${s.chef.level}${s.chef.points ? ` · <b>${s.chef.points} Talentpunkt${s.chef.points > 1 ? 'e' : ''}</b>` : ''}<span class="xpbar"><i style="width:${(s.chef.xp / KL.xpFor(s.chef.level)) * 100}%"></i></span></button>
-          </div>
-          <dl class="kpis">
-            <div><dt>Konto</dt><dd class="${s.money < 0 ? 'neg' : ''}">${eur(s.money)}</dd></div>
-            <div><dt>Ruf</dt><dd>${Math.round(s.rep)}<small>/100</small></dd></div>
-            <div><dt>Buzz</dt><dd>${Math.round(s.buzz)}</dd></div>
-            <div><dt>Energie</dt><dd class="${s.chef.energy < 30 ? 'neg' : ''}">${Math.round(s.chef.energy)}<small>%</small></dd></div>
-            <div><dt>Jahr ${s.year} · ${KL.season(s).name}</dt><dd>Woche ${wiy}<small>/${KL.WEEKS_PER_YEAR}</small></dd></div>
-          </dl>
-        </header>
+        ${this.header(s)}
         <nav class="tabs" aria-label="Bereiche">
           ${TABS.map((t) => `<button type="button" class="tab ${t.id === this.tab ? 'on' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}
           <button type="button" class="tab service-cta" data-act="service">Service starten →</button>
@@ -91,6 +80,47 @@
       this.mountWorld();
       this.mountPortrait();
       if (s.pendingEvent && !this.busy) this.showEvent();
+    },
+
+    header(s) {
+      const wiy = KL.weekOfYear(s);
+      const dist = s.district ? KL.byId(KL.DISTRICTS, s.district) : null;
+      return `
+        <header class="topbar">
+          <div class="brand">
+            <span class="eyebrow">${esc(s.chef.name)} · ${esc(KL.byId(KL.LOCATIONS, s.location).name)}${dist ? ' · ' + esc(dist.name) : ''}</span>
+            <h1>${esc(s.name)} ${starGlyphs(s.stars)}${s.green ? '<span class="green-star" title="Grüner Stern">✦</span>' : ''}</h1>
+            <button type="button" class="lvl" data-tab-go="chef" title="Charakter öffnen">Level ${s.chef.level}${s.chef.points ? ` · <b>${s.chef.points} Talentpunkt${s.chef.points > 1 ? 'e' : ''}</b>` : ''}<span class="xpbar"><i style="width:${(s.chef.xp / KL.xpFor(s.chef.level)) * 100}%"></i></span></button>
+          </div>
+          <dl class="kpis">
+            <div><dt>Konto</dt><dd class="${s.money < 0 ? 'neg' : ''}">${eur(s.money)}</dd></div>
+            <div><dt>Ruf</dt><dd>${Math.round(s.rep)}<small>/100</small></dd></div>
+            <div><dt>Buzz</dt><dd>${Math.round(s.buzz)}</dd></div>
+            <div><dt>Energie</dt><dd class="${s.chef.energy < 30 ? 'neg' : ''}">${Math.round(s.chef.energy)}<small>%</small></dd></div>
+            <div><dt>Jahr ${s.year} · ${KL.season(s).name}</dt><dd>Woche ${wiy}<small>/${KL.WEEKS_PER_YEAR}</small></dd></div>
+          </dl>
+        </header>`;
+    },
+
+    refreshTop() {
+      const h = document.querySelector('#app > .topbar');
+      if (!h) return;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = this.header(this.s);
+      const nh = tmp.firstElementChild;
+      h.replaceWith(nh);
+      nh.querySelectorAll('[data-tab-go]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tabGo)));
+    },
+
+    openTab(id) { KL.Dialog.close(true); this.setTab(id); },
+    afterDialogAction() { KL.save(this.s); this.refreshTop(); },
+    afterDialogClose() {
+      const done = KL.checkQuests(this.s);
+      done.forEach((q, i) => setTimeout(() => this.toast(`Quest erfüllt: ${q.name} · +${q.xp} XP`, 'good'), i * 400));
+      KL.save(this.s);
+      const sig = this.s.team.map((m) => m.id).join();
+      if (sig !== this.teamSig) this.render(); else this.refreshTop();
+      if (this.s.levelUps) this.showLevelUp();
     },
 
     /* ---------------- ZENTRALE ---------------- */
@@ -380,7 +410,7 @@
             <fieldset class="supplier ${menuCats.has(c.id) ? '' : 'idle'}">
               <legend>${c.name}${menuCats.has(c.id) ? '' : ' <small>(nicht auf der Karte)</small>'}</legend>
               ${KL.SUPPLIERS.map((sp) => {
-                const locked = s.rep < sp.minRep && !KL.hasPerk(s, 'netzwerk');
+                const locked = s.rep < sp.minRep && !KL.hasPerk(s, 'netzwerk') && !(sp.id === 'direkt' && c.id === 'fisch' && s.flags.jensDeal);
                 return `<label class="radio ${locked ? 'locked' : ''}">
                   <input type="radio" name="sup-${c.id}" value="${sp.id}" ${s.suppliers[c.id] === sp.id ? 'checked' : ''} ${locked ? 'disabled' : ''} data-sup="${c.id}">
                   <span><b>${sp.name}</b><small>Qualität ${sp.q} · Preis ×${sp.cost.toString().replace('.', ',')} · Zuverlässig ${Math.round(sp.rel * 100)} %${sp.regional ? ' · regional' : ''}${locked ? ` · ab Ruf ${sp.minRep}` : ''}</small></span>
@@ -513,6 +543,7 @@
 
     /* ---------------- RESTAURANT (Welt + Bau-Modus) ---------------- */
     restaurant(s, f) {
+      if (this.scene === 'kiez') return this.kiez(s, f);
       const ls = KL.layoutStats(s);
       const b = this.build;
       const workers = 1 + s.team.filter((m) => KL.ROLES[m.role].area === 'kueche' && m.role !== 'spueler').length;
@@ -526,13 +557,14 @@
       <div class="resto">
         <section class="resto-stage ${b.on ? 'building' : ''}">
           <div class="stage-top">
-            <div><span class="eyebrow">${esc(KL.byId(KL.LOCATIONS, s.location).name)} · ${KL.season(s).name}</span><h2>${b.on ? (b.type ? `Platzieren: ${esc(KL.FURN[b.type].name)}${b.moving ? ' (verschieben)' : ''}` : 'Bau-Modus: Möbel antippen oder aus der Liste wählen') : 'Dein Restaurant am Nachmittag'}</h2></div>
+            <div><span class="eyebrow">${esc(KL.byId(KL.LOCATIONS, s.location).name)} · ${KL.season(s).name}</span><h2>${b.on ? (b.type ? `Platzieren: ${esc(KL.FURN[b.type].name)}${b.moving ? ' (verschieben)' : ''}` : 'Bau-Modus: Möbel antippen oder aus der Liste wählen') : 'Du bist dran: Klick irgendwohin oder lauf mit WASD'}</h2></div>
             <div class="row gap">
               ${b.on && (b.type || b.sel) ? '<button type="button" class="btn small ghost" data-act="cancelbuild">Abbrechen</button>' : ''}
               <button type="button" class="btn small ${b.on ? 'heat' : ''}" data-act="buildtoggle">${b.on ? 'Fertig' : 'Bauen'}</button>
             </div>
           </div>
           <div class="world-wrap"><canvas id="world-canvas" aria-label="Isometrische Ansicht deines Restaurants"></canvas></div>
+          ${b.on ? '' : '<p class="fine roam-help">Herd → Testküche · Pass → Service · Büro-Ecke → Zahlen &amp; Guide · Weinregal → Keller · Brigade antippen → Gespräch · Tür unten → raus in den Kiez. <kbd>E</kbd> benutzt, <kbd>1</kbd>–<kbd>9</kbd> wählt im Gespräch.</p>'}
           ${sel ? `<div class="selbar"><span><b>${esc(sel.name)}</b> ${sel.fixed ? '· fest eingebaut' : `· Wiederverkauf ${eur(sel.cost * 0.5)}`}</span><span class="row gap"><button type="button" class="btn small" data-act="movefurn">Verschieben</button>${sel.fixed ? '' : '<button type="button" class="btn small ghost" data-act="sellfurn">Verkaufen</button>'}</span></div>` : ''}
           <div class="row gap stage-cta">
             <button class="btn heat big" type="button" data-act="service">Service am Pass spielen</button>
@@ -562,17 +594,56 @@
       </div>`;
     },
 
+    kiez(s, f) {
+      const dist = s.district ? KL.byId(KL.DISTRICTS, s.district) : null;
+      const places = [
+        ['ralf', 'Großmarkt', 'Günstige Ware, verlässlich'],
+        ['hanne', 'Markthalle', 'Bio-Hof, regional'],
+        ['clement', 'Feinkost-Lieferwagen', 'Premium ab Ruf 15'],
+        ['jens', 'Hafen', 'Fisch direkt vom Kutter'],
+        ['greta', 'Park', 'Wildkräuter & Pilze'],
+        ['ines', 'Weinhandlung', 'Weine & Beratung'],
+        ['kalle', 'Zum Kochlöffel', 'Köche suchen Arbeit'],
+        ['albers', 'Bank', 'Kredite & Tilgung'],
+        ['mira', 'Café Feder', 'Gerüchte & Presse'],
+      ];
+      return `
+      <div class="resto">
+        <section class="resto-stage">
+          <div class="stage-top">
+            <div><span class="eyebrow">${dist ? esc(dist.name) + ' · ' : ''}${KL.season(s).name} · Nachmittag</span><h2>Der Kiez: Lauf hin, sprich die Leute an</h2></div>
+            <button type="button" class="btn small" data-act="gohome">Zurück ins Restaurant</button>
+          </div>
+          <div class="world-wrap kiez"><canvas id="city-canvas" aria-label="Isometrische Karte des Kiezes"></canvas></div>
+          <p class="fine roam-help">Klick auf eine Person oder Tür. Dein Restaurant ist das Haus mit dem roten Schild oben links.</p>
+        </section>
+        <aside class="resto-side">
+          <section class="panel">
+            <h2>Wer ist wo?</h2>
+            <ul class="places">${places.map(([id, place, what]) => `<li><button type="button" class="linkish" data-act="walkto" data-id="${id}"><b>${esc(KL.NPCS[id].name)}</b> · ${place}</button><small>${what}</small></li>`).join('')}</ul>
+          </section>
+          <section class="panel">
+            <h2>Offene Aufträge</h2>
+            <ul class="places">${KL.QUESTS.filter((q) => q.giver && s.flags[q.id] && !s.quests.includes(q.id)).map((q) => `<li><b>${esc(q.name)}</b><small>${esc(q.giver)}: ${esc(q.desc)}</small></li>`).join('') || '<li class="muted">Noch keine. Frag die Leute, ob sie was für dich haben.</li>'}</ul>
+          </section>
+        </aside>
+      </div>`;
+    },
+
     mountWorld() {
       if (this.world) { this.world.destroy(); this.world = null; }
+      const s = this.s;
+      this.teamSig = s.team.map((m) => m.id).join();
+      const city = document.getElementById('city-canvas');
+      if (city) return this.mountCity(city);
       const cv = document.getElementById('world-canvas');
       if (!cv) return;
-      const s = this.s;
-      const w = new KL.World(cv, s, { mode: this.build.on ? 'build' : 'idle', night: false, maxH: Math.max(300, window.innerHeight * 0.66) });
+      const w = new KL.World(cv, s, { mode: this.build.on ? 'build' : 'idle', tod: 0.32, maxH: Math.max(300, window.innerHeight * 0.66) });
       this.world = w;
+      if (!this.build.on) return this.attachRoam(w);
       if (this.build.type) w.ghost = { type: this.build.type, ignore: this.build.moving };
       w.selected = this.build.sel;
       w.onTile = (t) => {
-        if (!this.build.on) { this.build.on = true; this.render(); return; }
         const b = this.build;
         if (b.type) {
           const err = KL.canPlace(s, b.type, t.x, t.y, b.moving);
@@ -598,6 +669,96 @@
         b.sel = it || null;
         this.render();
       };
+    },
+
+    attachRoam(w) {
+      const s = this.s;
+      const player = w.agents.find((a) => a.kind === 'chef');
+      const pos = this.playerPos.restaurant;
+      if (pos) { player.x = pos.x; player.y = pos.y; }
+      const STATION = ['herd', 'posten', 'grill', 'sousvide', 'kombi', 'eismaschine', 'raeucher', 'ferment', 'dryager'];
+      const door = KL.doorTile(s);
+      KL.Roam.attach(w, {
+        player,
+        zone: 'all',
+        targets: () => {
+          const out = [];
+          s.layout.forEach((it) => {
+            const f = KL.FURN[it.type];
+            const base = { x: it.x, y: it.y, w: f.w, d: f.d };
+            if (STATION.includes(it.type)) out.push({ ...base, label: 'Testküche', act: () => this.openTab('testkueche') });
+            else if (it.type === 'pass') out.push({ ...base, label: 'Service', act: () => this.passDialog() });
+            else if (it.type === 'buero') out.push({ ...base, label: 'Büro & Guide', act: () => this.openTab('zentrale') });
+            else if (it.type === 'weinregal' || it.type === 'bar') out.push({ ...base, label: 'Weinkeller', act: () => this.openTab('wein') });
+            else if (it.type === 'kuehlhaus') out.push({ ...base, label: 'Einkauf & Lager', act: () => this.openTab('einkauf') });
+            else if (it.type === 'spuele') out.push({ ...base, label: 'Mit anpacken', act: () => this.sinkDialog() });
+          });
+          out.push({ x: door.x, y: door.y, w: 1, d: 1, door, label: 'Raus in den Kiez', h: 0.6, act: () => this.goKiez() });
+          w.agents.filter((a) => a.kind === 'cook' || a.kind === 'waiter').forEach((a) => {
+            const m = s.team.find((x) => x.id === a.id);
+            if (m) out.push({ person: true, px: a.x, py: a.y, label: `Mit ${m.name.split(' ')[0]} reden`, act: () => { a.path = []; a.idle = 8; KL.Dialog.open(KL.staffTalk(s, m)); } });
+          });
+          return out;
+        },
+        overlay: () => { this.playerPos.restaurant = { x: player.x, y: player.y }; },
+      });
+    },
+
+    mountCity(cv) {
+      const s = this.s;
+      const w = new KL.City(cv, s, { mode: 'idle', tod: 0.22, maxH: Math.max(320, window.innerHeight * 0.66) });
+      this.world = w;
+      const pos = this.playerPos.kiez;
+      if (pos) { w.player.x = pos.x; w.player.y = pos.y; }
+      const NPC_AT = { home: null, bank: 'albers', kneipe: 'kalle', grossmarkt: 'ralf', markthalle: 'hanne', wein: 'ines', cafe: 'mira' };
+      this.cityTargets = () => {
+        const out = KL.CITY_BUILDINGS.map((b) => ({ x: b.x, y: b.y, w: b.w, d: b.d, door: b.door, h: b.h + 0.8, label: b.id === 'home' ? 'Rein ins Restaurant' : KL.NPCS[NPC_AT[b.id]].name, act: () => (b.id === 'home' ? this.goHome() : KL.Dialog.open(KL.cityDialog(s, NPC_AT[b.id]))) }));
+        w.agents.filter((a) => a.kind === 'npc').forEach((a) => out.push({ person: true, npc: a.npc, px: a.x, py: a.y, label: `${KL.NPCS[a.npc].name} ansprechen`, act: () => KL.Dialog.open(KL.cityDialog(s, a.npc)) }));
+        return out;
+      };
+      KL.Roam.attach(w, { player: w.player, zone: null, targets: this.cityTargets, overlay: () => { this.playerPos.kiez = { x: w.player.x, y: w.player.y }; } });
+    },
+
+    goKiez() { this.scene = 'kiez'; this.playerPos.kiez = null; this.render(); window.scrollTo({ top: 0 }); },
+    goHome() {
+      this.scene = 'restaurant';
+      const d = KL.doorTile(this.s);
+      this.playerPos.restaurant = { x: d.x + 0.5, y: d.y - 0.5 };
+      this.render();
+    },
+
+    passDialog() {
+      const s = this.s;
+      const f = KL.forecast(s);
+      const souschef = s.team.find((m) => m.role === 'souschef');
+      KL.Dialog.open(() => ({
+        name: souschef ? souschef.name : 'Der Pass',
+        role: souschef ? 'Souschef' : 'Wärmelampen an, Bons auf die Schiene',
+        look: souschef ? KL.lookFor(souschef.name, 'souschef') : KL.lookFor(s.chef.name, 'chef'),
+        portrait: souschef ? { toque: true, cloth: '#ecebe6', mood: 0.6 } : KL.chefPortraitOpts(s),
+        text: `Heute Abend erwarten wir rund ${Math.round(f.covers / Math.max(1, f.days))} Gäste, ${KL.menuDishes(s).length} Gänge. ${f.kitchen.notes[0] ? f.kitchen.notes[0] + '.' : 'Die Küche ist bereit.'} ${s.inspections.planned.includes(KL.weekOfYear(s)) && Math.random() < 0.4 ? 'Irgendwas liegt heute in der Luft …' : ''}`,
+        options: [
+          { label: 'Ich stehe selbst am Pass', primary: true, run: () => { KL.Dialog.close(true); setTimeout(() => this.startService(false), 30); return null; } },
+          { label: souschef ? `${souschef.name.split(' ')[0]} übernimmt, ich schaue zu` : 'Brigade übernimmt, ich schaue zu', run: () => { KL.Dialog.close(true); setTimeout(() => this.startService(true), 30); return null; } },
+          { label: 'Menü & Preise nochmal ansehen', run: () => { this.openTab('menue'); return null; } },
+          { label: 'Diese Woche Betriebsferien', run: () => { KL.Dialog.close(true); this.act('close', {}); return null; } },
+        ],
+      }));
+    },
+
+    sinkDialog() {
+      const s = this.s;
+      const sp = s.team.find((m) => m.role === 'spueler');
+      KL.Dialog.open(() => ({
+        name: sp ? sp.name : 'Die Spüle',
+        role: sp ? 'Spüler*in · das Herz der Küche' : 'Niemand da. Nur Geschirr.',
+        look: sp ? KL.lookFor(sp.name, 'spueler') : KL.lookFor(s.chef.name, 'chef'),
+        portrait: sp ? { cloth: '#5a6b7a', mood: sp.morale / 100 } : KL.chefPortraitOpts(s),
+        text: sp ? 'Chef*in an der Spüle? Das hab ich noch nie erlebt.' : 'Ohne Spüler*in türmt sich hier alles. Stell jemanden ein – Kalle in der Kneipe kennt Leute.',
+        options: [
+          { label: 'Eine Stunde mitspülen', hint: s.flags.washed === s.week ? 'Diese Woche schon' : '+Moral fürs ganze Team, −5 Energie', disabled: s.flags.washed === s.week, run: () => { s.flags.washed = s.week; s.chef.energy = Math.max(0, s.chef.energy - 5); s.team.forEach((m) => (m.morale = Math.min(100, m.morale + 4))); KL.gainXP(s, 15); return 'Hände in heißem Wasser, Gespräche über Fußball und Schulden. Das Team redet noch tagelang davon. +15 XP'; } },
+        ],
+      }));
     },
 
     /* ---------------- CHEF*IN (Charakter) ---------------- */
@@ -726,6 +887,12 @@
           if (e.bold && !s.discovered.includes(key)) { s.discovered.push(key); s.buzz += 3; KL.gainXP(s, 40); this.toast(`Neue Kombination entdeckt: ${e.bold}! +Buzz +40 XP`, 'good'); }
           else this.toast('Ab ins Rezeptbuch. +15 XP', 'good');
           break;
+        }
+        case 'gohome': return this.goHome();
+        case 'walkto': {
+          const t = this.cityTargets && this.cityTargets().find((x) => x.npc === ds.id);
+          if (t && this.world && this.world.onTile) this.world.onTile({ x: Math.floor(t.px), y: Math.floor(t.py) });
+          return;
         }
         case 'perk':
           if (KL.unlockPerk(s, ds.id)) this.toast(`Talent gelernt: ${KL.byId(KL.PERKS, ds.id).name}`, 'good');

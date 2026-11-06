@@ -438,3 +438,11 @@ KL.QUESTS = [
   { id: 'q_star2', name: 'Einen Umweg wert', desc: 'Zwei Sterne.', xp: 800, check: (s) => s.stars >= 2 },
   { id: 'q_star3', name: 'Legende', desc: 'Drei Sterne. Eine eigene Reise wert.', xp: 1500, check: (s) => s.stars >= 3 },
 ];
+
+// Quests, die du im Kiez von Figuren bekommst (erst nach Annahme aktiv)
+KL.QUESTS.push(
+  { id: 'q_hanne', giver: 'Hanne', name: 'Hannes Acker', desc: 'Zwei herzhafte Gemüsegerichte auf der Karte, Gemüse regional bezogen.', xp: 150, check: (s) => s.flags.q_hanne && KL.byId(KL.SUPPLIERS, s.suppliers.gemuese).regional && KL.menuDishes(s).filter((d) => { const p = KL.byId(KL.PRODUCTS, d.product); return p.cat === 'gemuese' && p.type === 'herzhaft'; }).length >= 2, reward: (s) => { s.rep = Math.min(100, s.rep + 4); } },
+  { id: 'q_jens', giver: 'Jens', name: 'Fang des Tages', desc: 'Bring ein Fischgericht mit mindestens 60 % Reife auf die Karte.', xp: 150, check: (s) => s.flags.q_jens && KL.menuDishes(s).some((d) => KL.byId(KL.PRODUCTS, d.product).cat === 'fisch' && d.maturity >= 60), reward: (s) => { s.flags.jensDeal = true; } },
+  { id: 'q_greta', giver: 'Greta', name: 'Der Wald auf dem Teller', desc: 'Setz ein Gericht mit Wildkräutern, Fichtennadel oder Sauerampfer auf die Karte.', xp: 120, check: (s) => s.flags.q_greta && KL.menuDishes(s).some((d) => ['wildkraeuter', 'fichte', 'sauerampfer'].includes(d.accent)), reward: (s) => { s.chef.crea = Math.min(100, s.chef.crea + 3); } },
+  { id: 'q_mira', giver: 'Mira', name: 'Überrasch mich', desc: 'Biete ein Gericht mit Kreativität 80 oder mehr an.', xp: 150, check: (s) => s.flags.q_mira && KL.menuDishes(s).some((d) => KL.evalDish(s, d).creativity >= 80), reward: (s) => { s.buzz += 15; s.news.unshift({ week: s.week, text: 'Mira Haddad schreibt im Stadtmagazin über dich. Das Telefon klingelt.' }); } },
+);

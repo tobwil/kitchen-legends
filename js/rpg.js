@@ -255,7 +255,7 @@
           ]);
         }
         case 'jens': {
-          const ok = s.rep >= 35 || KL.hasPerk(s, 'netzwerk') || s.flags.jensDeal;
+          const ok = s.rep >= ((KL.site(s).d && KL.site(s).d.fishRep) || 35) || KL.hasPerk(s, 'netzwerk') || s.flags.jensDeal;
           return npc('jens', ok ? 'Fang von heute Nacht. Der Saibling hat vor sechs Stunden noch gezappelt.' : 'Ich verkauf nicht an jeden. Zeig mir erst, dass du mit Fisch umgehen kannst.', [
             { label: 'Fisch direkt vom Kutter', hint: 'Qualität 95 · regional · nicht immer zuverlässig', disabled: !ok, run: () => { setSup(s, ['fisch'], 'direkt'); return 'Wenn Sturm ist, kommt nix. Dann musst du improvisieren. Das ist der Deal.'; } },
             questBtn(s, 'q_jens', 'Wie überzeuge ich dich?'),

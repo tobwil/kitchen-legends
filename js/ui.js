@@ -619,7 +619,7 @@
         <dl class="mini">
           <div><dt>Kredit offen</dt><dd>${eur(s.debt)}</dd></div>
           <div><dt>Zinsen/Woche</dt><dd>${eur(s.debt * 0.006)}</dd></div>
-          <div><dt>Miete/Woche</dt><dd>${eur(KL.byId(KL.LOCATIONS, s.location).rent)}</dd></div>
+          <div><dt>Miete/Woche</dt><dd>${eur(KL.site(s).rent)}</dd></div>
         </dl>
         <div class="row gap"><button type="button" class="btn small" data-act="repay" ${s.debt <= 0 || s.money < 5000 ? 'disabled' : ''}>5.000 € tilgen</button></div>
       </section>`;

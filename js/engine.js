@@ -18,7 +18,7 @@
   KL.starLabel = (lvl) => KL.STAR_LEVELS.find((x) => x.level === lvl).name;
 
   /* ---------- Spielstand ---------- */
-  KL.newGame = function ({ chefName, restaurantName, archetype, location }) {
+  KL.newGame = function ({ chefName, restaurantName, archetype, location, site, district }) {
     const arch = KL.byId(KL.ARCHETYPES, archetype);
     const s = {
       v: 2,
@@ -28,6 +28,9 @@
       levelUps: 0,
       name: restaurantName,
       location,
+      site: site || null,
+      district: district || null,
+      theme: null,
       week: 1,
       year: 1,
       money: 42000,
@@ -218,12 +221,21 @@
     return { flav, harmony, creativity, difficulty, wine, baseCost, classic, bold, inSeason, type: p.type, cat: p.cat, notes, texes: [...texes] };
   };
 
+  /* ---------- Standort ---------- */
+  // Gebäude-Typ (Raumgröße) + gewähltes Ladenlokal + Viertel
+  KL.site = (s) => {
+    const loc = KL.byId(KL.LOCATIONS, s.location);
+    const sd = s.site ? KL.siteById(s.site) : null;
+    const d = sd ? sd.district : null;
+    return { name: sd ? sd.site.name : loc.name, rent: sd ? sd.site.rent : loc.rent, prestige: sd ? sd.site.prestige : loc.prestige, base: loc.base * (d ? d.foot : 1), d };
+  };
+
   /* ---------- Kennzahlen ---------- */
   KL.seats = (s) => KL.layoutStats(s).seats + (s.interior.includes('chefstable') ? 6 : 0);
   KL.ambience = (s) => {
-    const loc = KL.byId(KL.LOCATIONS, s.location);
+    const loc = KL.site(s);
     const ls = KL.layoutStats(s);
-    return clamp(16 + loc.prestige + ls.decor - ls.crowd + s.interior.reduce((sum, id) => sum + KL.byId(KL.INTERIOR, id).amb, 0), 0, 100);
+    return clamp(16 + (loc.d ? loc.d.mood : 0) + (s.theme && KL.THEMES ? (KL.byId(KL.THEMES, s.theme) || {}).amb || 0 : 0) + loc.prestige + ls.decor - ls.crowd + s.interior.reduce((sum, id) => sum + KL.byId(KL.INTERIOR, id).amb, 0), 0, 100);
   };
 
   KL.kitchen = function (s, coversPerDay, courses) {
@@ -288,6 +300,8 @@
       let q = sup.q * 0.8 + feinkost.q * 0.2;
       if (!e.inSeason) q -= 14;
       if (s.equipment.includes('kuehlhaus')) q += 3;
+      const Dq = KL.site(s).d;
+      if (Dq && Dq.supQ[e.cat]) q += Dq.supQ[e.cat];
       if (fails.includes(e.cat)) q -= 15;
       if (d.product === 'kaviar' || d.accent === 'trueffel') q += 4;
       return clamp(q, 0, 100);
@@ -343,14 +357,17 @@
   // Was Gäste für angemessen halten: Ruf, Sterne, Raum und das, was auf dem Teller ankommt
   KL.expectedPrice = function (s, menuEval) {
     const quality = (menuEval.harmony + menuEval.product + menuEval.creativity) / 3;
-    return Math.round(18 + s.rep * 0.7 + quality * 0.55 + STAR_PRICE[s.stars] + KL.ambience(s) * 0.3 + menuEval.courses * 5 + (s.green ? 8 : 0));
+    const D = KL.site(s).d;
+    const spend = D ? D.spend + (D.growth || 0) * (s.year - 1) : 0;
+    return Math.round(spend + 18 + s.rep * 0.7 + quality * 0.55 + STAR_PRICE[s.stars] + KL.ambience(s) * 0.3 + menuEval.courses * 5 + (s.green ? 8 : 0));
   };
 
   /* Kernrechnung einer Woche. det = deterministisch (für Prognosen) */
   KL.compute = function (s, opts = {}) {
     const det = !!opts.det;
     const noise = (a, b) => (det ? (a + b) / 2 : rnd(a, b));
-    const loc = KL.byId(KL.LOCATIONS, s.location);
+    const loc = KL.site(s);
+    const D = loc.d;
     const fails = [];
     if (!det) {
       KL.CATEGORIES.forEach((c) => {
@@ -368,7 +385,9 @@
     if (sea === 'sommer' && s.interior.includes('terrasse')) seasonMod += 0.2;
     const buzz = s.buzz + (s.interior.includes('kueche') ? 6 : 0);
     const days = Math.max(0, s.openDays - s.weekMods.daysLost);
-    const perDayDemand = seats * loc.base * (0.2 + s.rep / 75) * STAR_PULL[s.stars] * priceFactor * (1 + buzz / 100) * seasonMod;
+    const compete = D ? D.compete + (1 - D.compete) * Math.min(1, s.rep / 70) : 1;
+    const starPull = 1 + (STAR_PULL[s.stars] - 1) * (D ? D.starPull : 1);
+    const perDayDemand = seats * loc.base * (0.2 + s.rep / 75) * starPull * compete * priceFactor * (1 + buzz / 100) * seasonMod;
     let covers = 0;
     for (let i = 0; i < days; i++) covers += Math.min(seats, Math.round(perDayDemand * noise(0.82, 1.18)));
     if (menu.courses === 0) covers = 0;
@@ -457,8 +476,10 @@
     s.money += c.profit;
     // Ruf und Buzz
     const repBefore = s.rep;
-    s.rep = clamp(s.rep + (c.sat - 4 - s.rep) * 0.14 + (c.covers > 0 ? 0 : -1), 0, 100);
+    const repD = (c.sat - 4 - s.rep) * 0.14 * (repBefore < c.sat && KL.site(s).d && KL.site(s).d.repSlow ? KL.site(s).d.repSlow : 1);
+    s.rep = clamp(s.rep + repD + (c.covers > 0 ? 0 : -1), 0, 100);
     s.buzz = Math.max(0, s.buzz * 0.78) + (KL.hasPerk(s, 'charisma') ? 3 : 0);
+    if (KL.site(s).d) s.buzz = Math.max(s.buzz, KL.site(s).d.buzz);
     report.repDelta = s.rep - repBefore;
 
     // Rezensionen
@@ -592,7 +613,7 @@
     const hist = s.history.slice(-12);
     const regional = avg(hist.map((h) => h.regional));
     const waste = avg(hist.map((h) => h.waste));
-    const green = level >= 0.5 && regional >= 0.7 && waste < 0.12;
+    const green = level >= 0.5 && regional >= (KL.site(s).d && KL.site(s).d.green ? 0.5 : 0.7) && waste < 0.12;
     const sorted = KL.CRITERIA.map((k) => ({ ...k, v: crit[k.id] })).sort((a, b) => b.v - a.v);
     const best = sorted[0], worst = sorted[sorted.length - 1];
     const quote = `Besonders überzeugt hat uns die ${best.name.toLowerCase()}. ${worst.v < 70 ? `Bei der ${worst.name.toLowerCase()} sehen wir noch Luft nach oben.` : 'Ein Haus, das auf ganzer Linie überzeugt.'}${sd > 6 ? ' Die Besuche fielen sehr unterschiedlich aus.' : ''}`;
@@ -624,7 +645,7 @@
 
   /* Betriebsferien: eine Woche zu */
   KL.closeWeek = function (s) {
-    const loc = KL.byId(KL.LOCATIONS, s.location);
+    const loc = KL.site(s);
     const wages = s.team.reduce((n, m) => n + m.wage, 0);
     const cost = loc.rent + wages + Math.round(s.debt * 0.006) + 200;
     s.money -= cost;

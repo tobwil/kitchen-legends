@@ -12,18 +12,21 @@
   KL.fmt = { eur, pct, esc, starGlyphs };
 
   const TABS = [
-    { id: 'zentrale', label: 'Zentrale' },
+    { id: 'restaurant', label: 'Restaurant' },
+    { id: 'chef', label: 'Chef*in' },
+    { id: 'zentrale', label: 'Büro & Guide' },
     { id: 'testkueche', label: 'Testküche' },
     { id: 'menue', label: 'Menü & Preise' },
     { id: 'einkauf', label: 'Einkauf & Logistik' },
     { id: 'wein', label: 'Weinkeller' },
     { id: 'team', label: 'Brigade' },
-    { id: 'raum', label: 'Raum & Küche' },
+    { id: 'raum', label: 'Renovierung' },
   ];
 
   const UI = {
     s: null,
-    tab: 'zentrale',
+    tab: 'restaurant',
+    build: { on: false, type: null, moving: null, sel: null },
     lab: { product: 'saibling', technique: 'gebeizt', accent: 'fichte', texture: 'chip' },
 
     mount(state) {
@@ -32,7 +35,12 @@
       this.render();
     },
 
-    save() { KL.save(this.s); },
+    save() {
+      const done = KL.checkQuests(this.s);
+      done.forEach((q, i) => setTimeout(() => this.toast(`Quest erfüllt: ${q.name} · +${q.xp} XP`, 'good'), i * 400));
+      KL.save(this.s);
+      if (this.s.levelUps && !this.busy) setTimeout(() => this.showLevelUp(), 300);
+    },
     setTab(id) {
       this.tab = id;
       try { localStorage.setItem('kl-tab', id); } catch (e) { /* egal */ }
@@ -62,6 +70,7 @@
           <div class="brand">
             <span class="eyebrow">${esc(s.chef.name)} · ${esc(KL.byId(KL.LOCATIONS, s.location).name)}</span>
             <h1>${esc(s.name)} ${starGlyphs(s.stars)}${s.green ? '<span class="green-star" title="Grüner Stern">✦</span>' : ''}</h1>
+            <button type="button" class="lvl" data-tab-go="chef" title="Charakter öffnen">Level ${s.chef.level}${s.chef.points ? ` · <b>${s.chef.points} Talentpunkt${s.chef.points > 1 ? 'e' : ''}</b>` : ''}<span class="xpbar"><i style="width:${(s.chef.xp / KL.xpFor(s.chef.level)) * 100}%"></i></span></button>
           </div>
           <dl class="kpis">
             <div><dt>Konto</dt><dd class="${s.money < 0 ? 'neg' : ''}">${eur(s.money)}</dd></div>
@@ -79,6 +88,8 @@
         <footer class="foot"><span>Kitchen Legends · Prototyp</span><button class="linkish" type="button" data-act="newgame">Neues Spiel</button></footer>`;
       app.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tab)));
       this.bind(app);
+      this.mountWorld();
+      this.mountPortrait();
       if (s.pendingEvent && !this.busy) this.showEvent();
     },
 
@@ -225,7 +236,7 @@
         <fieldset class="picker">
           <legend>${label}</legend>
           <div class="chips">${arr.map((x) => {
-            const locked = x.eq && !s.equipment.includes(x.eq);
+            const locked = x.eq && !s.equipment.includes(x.eq) && !(x.id === 'fermentiert' && KL.hasPerk(s, 'fermentation'));
             const off = x.seasons && x.seasons.length && !x.seasons.includes(sea);
             return `<button type="button" class="chip ${L[key] === x.id ? 'on' : ''} ${off ? 'offseason' : ''}" data-lab="${key}" data-id="${x.id}" ${locked ? 'disabled title="Benötigt ' + esc(KL.byId(KL.EQUIPMENT, x.eq).name) + '"' : ''}>${esc(x.name)}${locked ? ' 🔒' : ''}${extra ? extra(x) : ''}</button>`;
           }).join('')}</div>
@@ -369,7 +380,7 @@
             <fieldset class="supplier ${menuCats.has(c.id) ? '' : 'idle'}">
               <legend>${c.name}${menuCats.has(c.id) ? '' : ' <small>(nicht auf der Karte)</small>'}</legend>
               ${KL.SUPPLIERS.map((sp) => {
-                const locked = s.rep < sp.minRep;
+                const locked = s.rep < sp.minRep && !KL.hasPerk(s, 'netzwerk');
                 return `<label class="radio ${locked ? 'locked' : ''}">
                   <input type="radio" name="sup-${c.id}" value="${sp.id}" ${s.suppliers[c.id] === sp.id ? 'checked' : ''} ${locked ? 'disabled' : ''} data-sup="${c.id}">
                   <span><b>${sp.name}</b><small>Qualität ${sp.q} · Preis ×${sp.cost.toString().replace('.', ',')} · Zuverlässig ${Math.round(sp.rel * 100)} %${sp.regional ? ' · regional' : ''}${locked ? ` · ab Ruf ${sp.minRep}` : ''}</small></span>
@@ -485,9 +496,9 @@
         <div class="upgrade-grid">${KL.INTERIOR.map((x) => card(x, s.interior.includes(x.id), 'interior')).join('')}</div>
       </section>
       <section class="panel">
-        <h2>Küchenausstattung</h2>
-        <p class="muted">Geräte schalten Techniken in der Testküche frei und stärken die Küche.</p>
-        <div class="upgrade-grid">${KL.EQUIPMENT.map((x) => card(x, s.equipment.includes(x.id), 'equipment')).join('')}</div>
+        <h2>Küchengeräte</h2>
+        <p class="muted">Geräte wie Holzkohle-Ofen, Kombidämpfer oder Fermentationskammer stellst du direkt im Restaurant auf: Tab „Restaurant“ → Bauen → Küche.</p>
+        <div class="row gap"><button type="button" class="btn small" data-tab-go="restaurant">Zum Restaurant</button></div>
       </section>
       <section class="panel">
         <h2>Finanzen</h2>
@@ -498,6 +509,181 @@
         </dl>
         <div class="row gap"><button type="button" class="btn small" data-act="repay" ${s.debt <= 0 || s.money < 5000 ? 'disabled' : ''}>5.000 € tilgen</button></div>
       </section>`;
+    },
+
+    /* ---------------- RESTAURANT (Welt + Bau-Modus) ---------------- */
+    restaurant(s, f) {
+      const ls = KL.layoutStats(s);
+      const b = this.build;
+      const workers = 1 + s.team.filter((m) => KL.ROLES[m.role].area === 'kueche' && m.role !== 'spueler').length;
+      const group = (zone, title) => `<h3>${title}</h3><div class="palette">${Object.entries(KL.FURN).filter(([, x]) => x.zone === zone && !x.fixed).map(([id, x]) => {
+        const owned = x.eq && s.equipment.includes(x.eq);
+        return `<button type="button" class="pal ${b.type === id && !b.moving ? 'on' : ''}" data-act="pickfurn" data-id="${id}" ${owned || s.money < x.cost ? 'disabled' : ''}>
+          <b>${esc(x.name)}</b><small>${owned ? 'steht schon' : eur(x.cost)}${x.seats ? ` · ${x.seats} Plätze` : ''}${x.amb ? ` · Ambiente +${x.amb}` : ''}${x.stations ? ` · ${x.stations} Arbeitsplatz${x.stations > 1 ? 'e' : ''}` : ''}${x.wine ? ' · +Wein' : ''}${x.extras ? ' · +Barumsatz' : ''}</small></button>`;
+      }).join('')}</div>`;
+      const sel = b.sel ? KL.FURN[b.sel.type] : null;
+      return `
+      <div class="resto">
+        <section class="resto-stage ${b.on ? 'building' : ''}">
+          <div class="stage-top">
+            <div><span class="eyebrow">${esc(KL.byId(KL.LOCATIONS, s.location).name)} · ${KL.season(s).name}</span><h2>${b.on ? (b.type ? `Platzieren: ${esc(KL.FURN[b.type].name)}${b.moving ? ' (verschieben)' : ''}` : 'Bau-Modus: Möbel antippen oder aus der Liste wählen') : 'Dein Restaurant am Nachmittag'}</h2></div>
+            <div class="row gap">
+              ${b.on && (b.type || b.sel) ? '<button type="button" class="btn small ghost" data-act="cancelbuild">Abbrechen</button>' : ''}
+              <button type="button" class="btn small ${b.on ? 'heat' : ''}" data-act="buildtoggle">${b.on ? 'Fertig' : 'Bauen'}</button>
+            </div>
+          </div>
+          <div class="world-wrap"><canvas id="world-canvas" aria-label="Isometrische Ansicht deines Restaurants"></canvas></div>
+          ${sel ? `<div class="selbar"><span><b>${esc(sel.name)}</b> ${sel.fixed ? '· fest eingebaut' : `· Wiederverkauf ${eur(sel.cost * 0.5)}`}</span><span class="row gap"><button type="button" class="btn small" data-act="movefurn">Verschieben</button>${sel.fixed ? '' : '<button type="button" class="btn small ghost" data-act="sellfurn">Verkaufen</button>'}</span></div>` : ''}
+          <div class="row gap stage-cta">
+            <button class="btn heat big" type="button" data-act="service">Service am Pass spielen</button>
+            <button class="btn ghost" type="button" data-act="delegate">Souschef übernimmt (zuschauen)</button>
+          </div>
+        </section>
+        <aside class="resto-side">
+          <section class="panel">
+            <h2>Grundriss</h2>
+            <dl class="mini">
+              <div><dt>Plätze</dt><dd>${ls.seats}<small>/${ls.cap}</small></dd></div>
+              <div><dt>Ambiente</dt><dd>${f.amb}</dd></div>
+              <div><dt>Arbeitsplätze</dt><dd class="${workers > ls.stations ? 'neg' : ''}">${ls.stations}<small> für ${workers}</small></dd></div>
+              <div><dt>Gäste/Abend</dt><dd>${Math.round(f.covers / Math.max(1, f.days))}</dd></div>
+            </dl>
+            ${ls.crowd ? `<p class="hint warn">Zu eng gestellt: Ambiente −${ls.crowd}. Gäste wollen Luft.</p>` : ''}
+            ${ls.rawSeats > ls.cap ? `<p class="hint warn">Brandschutz: Mehr als ${ls.cap} Plätze sind hier nicht erlaubt.</p>` : ''}
+            ${workers > ls.stations ? '<p class="hint warn">Mehr Köch*innen als Arbeitsplätze. Bau Posten oder Geräte in die Küche.</p>' : ''}
+          </section>
+          ${b.on ? `<section class="panel build-panel">${group('dining', 'Gastraum')}${group('kitchen', 'Küche')}<p class="fine">Tische brauchen einen freien Gang zum Eingang. Verkauf bringt 50 % zurück.</p></section>` : `
+          <section class="panel">
+            <h2>Heute Abend</h2>
+            ${this.checklist(s, f)}
+            <p class="fine">Beim Service siehst du jede*n Gast. Bons, die du nicht selbst anrichtest, kocht die Brigade.</p>
+          </section>`}
+        </aside>
+      </div>`;
+    },
+
+    mountWorld() {
+      if (this.world) { this.world.destroy(); this.world = null; }
+      const cv = document.getElementById('world-canvas');
+      if (!cv) return;
+      const s = this.s;
+      const w = new KL.World(cv, s, { mode: this.build.on ? 'build' : 'idle', night: false, maxH: Math.max(300, window.innerHeight * 0.66) });
+      this.world = w;
+      if (this.build.type) w.ghost = { type: this.build.type, ignore: this.build.moving };
+      w.selected = this.build.sel;
+      w.onTile = (t) => {
+        if (!this.build.on) { this.build.on = true; this.render(); return; }
+        const b = this.build;
+        if (b.type) {
+          const err = KL.canPlace(s, b.type, t.x, t.y, b.moving);
+          if (err) return this.toast(err, 'bad');
+          if (b.moving) {
+            b.moving.x = t.x; b.moving.y = t.y;
+            b.moving = null; b.type = null;
+            this.toast('Verschoben.', 'good');
+          } else {
+            const fz = KL.FURN[b.type];
+            if (s.money < fz.cost) return this.toast('Dafür reicht das Konto nicht.', 'bad');
+            s.money -= fz.cost;
+            s.layout.push({ id: KL.util.uid(), type: b.type, x: t.x, y: t.y });
+            if (fz.eq) { s.equipment.push(fz.eq); b.type = null; }
+            if (fz.buzz) s.buzz += fz.buzz;
+            this.toast(`${fz.name} aufgestellt (−${eur(fz.cost)}).`, 'good');
+          }
+          this.save();
+          return this.render();
+        }
+        const m = KL.occupancy(s);
+        const it = m[t.y] && m[t.y][t.x];
+        b.sel = it || null;
+        this.render();
+      };
+    },
+
+    /* ---------------- CHEF*IN (Charakter) ---------------- */
+    chef(s) {
+      const c = s.chef;
+      const arch = KL.byId(KL.ARCHETYPES, c.archetype);
+      const need = KL.xpFor(c.level);
+      const attr = (name, v) => `<div class="cbar"><span class="cbar-label">${name}</span><span class="cbar-track"><i style="width:${clamp(v, 0, 100)}%"></i></span><b>${Math.round(v)}</b></div>`;
+      return `
+      <div class="sheet">
+        <section class="panel sheet-id">
+          <canvas id="portrait" width="220" height="260" aria-label="Porträt von ${esc(c.name)}"></canvas>
+          <div class="sheet-meta">
+            <span class="eyebrow">${esc(arch.name)}</span>
+            <h2 class="sheet-name">${esc(c.name)}</h2>
+            <p class="sheet-level">Level ${c.level}</p>
+            <div class="xp"><span class="cbar-track"><i style="width:${(c.xp / need) * 100}%"></i></span><small>${c.xp} / ${need} XP bis Level ${c.level + 1}</small></div>
+            ${attr('Technik', c.tech)}${attr('Kreativität', c.crea)}${attr('Führung', c.lead)}${attr('Energie', c.energy)}
+            <p class="fine">XP gibt es für jeden Service (mehr, wenn du selbst am Pass stehst), neue Gerichte, mutige Kombinationen, Inspektionen und Quests. Jedes Level: +1 auf alle Werte und ein Talentpunkt.</p>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="row between wrap"><h2>Talente</h2><span class="pill ${c.points ? 'hot' : ''}">${c.points} Punkt${c.points === 1 ? '' : 'e'} frei</span></div>
+          <div class="tree">${KL.PERK_TREES.map((t) => `
+            <div class="branch"><span class="eyebrow">${t.name} · ${t.stat}</span>
+              ${KL.PERKS.filter((p) => p.tree === t.id).map((p) => {
+                const st = KL.perkState(s, p);
+                return `<button type="button" class="perk ${st}" data-act="perk" data-id="${p.id}" ${st === 'available' ? '' : 'disabled'}><b>${p.name}</b><small>${p.desc}</small><em>${st === 'owned' ? 'Gelernt' : st === 'locked' ? 'Vorheriges Talent nötig' : st === 'available' ? 'Lernen' : 'Kein Punkt frei'}</em></button>`;
+              }).join('')}
+            </div>`).join('')}</div>
+        </section>
+        <section class="panel">
+          <h2>Quests <span class="muted">${s.quests.length}/${KL.QUESTS.length}</span></h2>
+          <ul class="quests">${KL.QUESTS.map((q) => `<li class="${s.quests.includes(q.id) ? 'done' : ''}"><span><b>${q.name}</b><small>${q.desc}</small></span><span class="pill">${s.quests.includes(q.id) ? 'Erledigt' : `+${q.xp} XP`}</span></li>`).join('')}</ul>
+        </section>
+      </div>`;
+    },
+
+    mountPortrait() {
+      const cv = document.getElementById('portrait');
+      if (!cv) return;
+      const c = cv.getContext('2d');
+      const s = this.s;
+      const look = KL.lookFor(s.chef.name, 'chef');
+      const W = cv.width, H = cv.height;
+      const g = c.createRadialGradient(W / 2, H * 0.35, 10, W / 2, H * 0.4, W * 0.8);
+      g.addColorStop(0, 'rgba(255,107,31,0.35)');
+      g.addColorStop(1, 'rgba(18,22,25,1)');
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+      // Jacke
+      c.fillStyle = '#f4f1ea';
+      c.beginPath(); c.moveTo(30, H); c.quadraticCurveTo(40, 170, W / 2, 165); c.quadraticCurveTo(W - 40, 170, W - 30, H); c.fill();
+      c.fillStyle = '#d4b06a'; c.fillRect(W / 2 - 34, 168, 68, 8);
+      c.fillStyle = '#2a2520'; [195, 220, 245].forEach((y) => { c.beginPath(); c.arc(W / 2 - 14, y, 4, 0, 7); c.arc(W / 2 + 14, y, 4, 0, 7); c.fill(); });
+      // Hals + Kopf
+      c.fillStyle = look.skin; c.fillRect(W / 2 - 16, 140, 32, 30);
+      c.beginPath(); c.ellipse(W / 2, 115, 42, 50, 0, 0, 7); c.fill();
+      c.fillStyle = look.hair;
+      c.beginPath(); c.ellipse(W / 2, 92, 44, 28, 0, Math.PI, 0); c.fill();
+      if (look.long) { c.fillRect(W / 2 - 44, 90, 14, 70); c.fillRect(W / 2 + 30, 90, 14, 70); }
+      // Kochmütze
+      c.fillStyle = '#ffffff';
+      c.fillRect(W / 2 - 40, 40, 80, 42);
+      [[-30, 38], [0, 28], [30, 38]].forEach(([dx, y]) => { c.beginPath(); c.arc(W / 2 + dx, y, 26, 0, 7); c.fill(); });
+      c.fillStyle = '#e6e2d8'; c.fillRect(W / 2 - 40, 74, 80, 8);
+      // Gesicht
+      c.fillStyle = '#2a2520';
+      c.beginPath(); c.arc(W / 2 - 15, 118, 4, 0, 7); c.arc(W / 2 + 15, 118, 4, 0, 7); c.fill();
+      c.strokeStyle = '#2a2520'; c.lineWidth = 3;
+      c.beginPath(); c.arc(W / 2, 132, 12, 0.2, Math.PI - 0.2); c.stroke();
+      if (s.chef.archetype === 'punk') { c.strokeStyle = '#8c4a3a'; c.beginPath(); c.moveTo(W / 2 + 22, 100); c.lineTo(W / 2 + 30, 128); c.stroke(); }
+      // Sterne
+      c.fillStyle = '#d4b06a'; c.font = '700 26px Figtree, sans-serif'; c.textAlign = 'center';
+      if (s.stars >= 1) c.fillText('✦'.repeat(s.stars), W / 2, H - 12);
+    },
+
+    showLevelUp() {
+      const s = this.s;
+      if (!s.levelUps || this.busy || document.querySelector('.modal-wrap, .evening, .ceremony')) return;
+      const n = s.levelUps;
+      s.levelUps = 0;
+      KL.save(s);
+      KL.Sound && KL.Sound.init && (KL.Sound.init(), KL.Sound.perfect());
+      const m = this.modal(`<span class="eyebrow">Level-Aufstieg</span><h2 class="lvlup">Level ${s.chef.level}</h2><p>${n > 1 ? `${n} Stufen auf einmal! ` : ''}+1 auf Technik, Kreativität und Führung. Du hast <b>${s.chef.points} Talentpunkt${s.chef.points === 1 ? '' : 'e'}</b> frei.</p><div class="row end"><button type="button" class="btn ghost" data-x>Später</button><button type="button" class="btn heat" data-ok>Talente ansehen</button></div>`, 'levelup');
+      m.wrap.querySelector('[data-x]').onclick = m.close;
+      m.wrap.querySelector('[data-ok]').onclick = () => { m.close(); this.setTab('chef'); };
     },
 
     /* ---------------- Interaktion ---------------- */
@@ -533,10 +719,39 @@
           s.money -= 150;
           s.chef.crea = Math.min(100, s.chef.crea + 0.4);
           s.dishes.push(d);
+          s.stats.dishesCreated++;
+          KL.gainXP(s, 15);
           const e = KL.evalDish(s, d);
           const key = `${d.product}+${d.accent}`;
-          if (e.bold && !s.discovered.includes(key)) { s.discovered.push(key); s.buzz += 3; this.toast(`Neue Kombination entdeckt: ${e.bold}! +Buzz`, 'good'); }
-          else this.toast('Ab ins Rezeptbuch.', 'good');
+          if (e.bold && !s.discovered.includes(key)) { s.discovered.push(key); s.buzz += 3; KL.gainXP(s, 40); this.toast(`Neue Kombination entdeckt: ${e.bold}! +Buzz +40 XP`, 'good'); }
+          else this.toast('Ab ins Rezeptbuch. +15 XP', 'good');
+          break;
+        }
+        case 'perk':
+          if (KL.unlockPerk(s, ds.id)) this.toast(`Talent gelernt: ${KL.byId(KL.PERKS, ds.id).name}`, 'good');
+          break;
+        case 'buildtoggle':
+          this.build.on = !this.build.on; this.build.type = null; this.build.moving = null; this.build.sel = null;
+          break;
+        case 'pickfurn':
+          this.build.on = true; this.build.type = ds.id; this.build.moving = null; this.build.sel = null;
+          break;
+        case 'cancelbuild':
+          this.build.type = null; this.build.moving = null; this.build.sel = null;
+          break;
+        case 'movefurn':
+          this.build.moving = this.build.sel; this.build.type = this.build.sel.type; this.build.sel = null;
+          break;
+        case 'sellfurn': {
+          const it = this.build.sel;
+          const fz = KL.FURN[it.type];
+          if (fz.fixed) return this.toast('Der Pass bleibt. Ohne Pass kein Service.', 'bad');
+          if (fz.minOne && s.layout.filter((x) => x.type === it.type).length <= 1) return this.toast(`Mindestens ein ${fz.name} muss bleiben.`, 'bad');
+          s.layout = s.layout.filter((x) => x !== it);
+          if (fz.eq) s.equipment = s.equipment.filter((e) => e !== fz.eq);
+          s.money += Math.round(fz.cost * 0.5);
+          this.build.sel = null;
+          this.toast(`${fz.name} verkauft (+${eur(fz.cost * 0.5)}).`);
           break;
         }
         case 'addmenu':
@@ -610,7 +825,7 @@
           s.money -= 5000; s.debt = Math.max(0, s.debt - 5000);
           break;
         case 'service': return this.startService();
-        case 'delegate': return this.finishWeek(KL.delegatedService(s));
+        case 'delegate': return this.startService(true);
         case 'close': return this.confirm('Betriebsferien?', 'Eine Woche zu: Fixkosten laufen weiter, du tankst 45 Energie, das Team erholt sich.', 'Laden zusperren', () => { const r = KL.closeWeek(s); this.afterWeek(r); });
         case 'newgame': return this.confirm('Neues Spiel?', 'Der aktuelle Spielstand wird gelöscht.', 'Neu anfangen', () => { KL.wipe(); KL.boot(true); });
         default: return;
@@ -619,11 +834,12 @@
       this.render();
     },
 
-    startService() {
+    startService(auto) {
       const s = this.s;
       if (KL.menuDishes(s).length < 1) return this.toast('Ohne Menü kein Service. Ab in die Testküche!', 'bad');
-      const setup = KL.serviceSetup(s);
-      KL.Service.start(s, setup, (result) => this.finishWeek(result));
+      if (KL.layoutStats(s).seats < 2) return this.toast('Ohne Tische keine Gäste. Bau erst Tische im Restaurant.', 'bad');
+      if (this.world) { this.world.destroy(); this.world = null; }
+      KL.Evening.start(s, { auto: !!auto }, (result) => this.finishWeek(result));
     },
 
     finishWeek(service) {
@@ -635,7 +851,7 @@
       this.busy = true;
       this.save();
       this.render();
-      const done = () => { this.busy = false; this.save(); this.render(); };
+      const done = () => { this.busy = false; this.save(); this.render(); if (this.s.levelUps) this.showLevelUp(); };
       this.showReport(r, () => {
         const s = this.s;
         if (s.gameOver) return this.showGameOver();
@@ -650,7 +866,7 @@
       wrap.innerHTML = `<div class="modal ${cls || ''}" role="dialog" aria-modal="true">${html}</div>`;
       document.body.appendChild(wrap);
       document.body.classList.add('no-scroll');
-      const close = () => { wrap.remove(); if (!document.querySelector('.modal-wrap, .pass-overlay')) document.body.classList.remove('no-scroll'); };
+      const close = () => { wrap.remove(); if (!document.querySelector('.modal-wrap, .evening')) document.body.classList.remove('no-scroll'); };
       const first = wrap.querySelector('button');
       if (first) setTimeout(() => first.focus(), 30);
       return { wrap, close };
@@ -692,6 +908,7 @@
         ${r.wasteRate > 0.15 ? `<p class="hint warn">${pct(r.wasteRate)} der Ware im Müll. Bestellmenge senken oder Kühlhaus kaufen.</p>` : ''}
         ${r.events.map((h) => `<p class="hint warn">${esc(h)}</p>`).join('')}
         ${r.hints.map((h) => `<p class="hint insp">${esc(h)}</p>`).join('')}
+        ${r.xp ? `<p class="xp-line">+${r.xp} XP${(r.quests || []).map((q) => ` · Quest „${esc(q.name)}“ +${q.xp} XP`).join('')}</p>` : ''}
         ${r.reviews.length ? `<ul class="feed">${r.reviews.map((x) => `<li><span class="eyebrow">${x.src} · ${'★'.repeat(x.stars)}${'☆'.repeat(5 - x.stars)}</span>„${esc(x.text)}“</li>`).join('')}</ul>` : ''}`;
       const m = this.modal(`${html}<div class="row end"><button type="button" class="btn heat" data-ok>Weiter</button></div>`, 'report');
       m.wrap.querySelector('[data-ok]').onclick = () => { m.close(); next(); };

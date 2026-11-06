@@ -21,8 +21,11 @@
   KL.newGame = function ({ chefName, restaurantName, archetype, location }) {
     const arch = KL.byId(KL.ARCHETYPES, archetype);
     const s = {
-      v: 1,
-      chef: { name: chefName, archetype, tech: arch.tech, crea: arch.crea, lead: arch.lead, energy: 100 },
+      v: 2,
+      chef: { name: chefName, archetype, tech: arch.tech, crea: arch.crea, lead: arch.lead, energy: 100, level: 1, xp: 0, points: 1, perks: [] },
+      stats: { servicesPlayed: 0, dishesCreated: 0, bestPerfect: 0, perfectTotal: 0 },
+      quests: [],
+      levelUps: 0,
       name: restaurantName,
       location,
       week: 1,
@@ -75,6 +78,7 @@
       s.dishes.push(d);
       s.menu.push(d.id);
     });
+    KL.initLayout(s);
     KL.refreshCandidates(s);
     KL.planInspections(s);
     s.orderCovers = Math.max(10, KL.forecast(s).covers);
@@ -82,8 +86,50 @@
     return s;
   };
 
+  /* ---------- RPG ---------- */
+  KL.hasPerk = (s, id) => !!(s.chef.perks && s.chef.perks.includes(id));
+  KL.xpFor = (level) => Math.round(100 * Math.pow(level, 1.4));
+  KL.gainXP = function (s, n) {
+    s.chef.xp += Math.round(n);
+    let ups = 0;
+    while (s.chef.xp >= KL.xpFor(s.chef.level)) {
+      s.chef.xp -= KL.xpFor(s.chef.level);
+      s.chef.level++;
+      s.chef.points++;
+      s.chef.tech = Math.min(100, s.chef.tech + 1);
+      s.chef.crea = Math.min(100, s.chef.crea + 1);
+      s.chef.lead = Math.min(100, s.chef.lead + 1);
+      ups++;
+    }
+    s.levelUps = (s.levelUps || 0) + ups;
+    return ups;
+  };
+  KL.checkQuests = function (s) {
+    const done = [];
+    KL.QUESTS.forEach((q) => {
+      if (!s.quests.includes(q.id) && q.check(s)) { s.quests.push(q.id); KL.gainXP(s, q.xp); done.push(q); }
+    });
+    return done;
+  };
+  KL.perkState = function (s, p) {
+    if (KL.hasPerk(s, p.id)) return 'owned';
+    const prev = KL.PERKS.find((x) => x.tree === p.tree && x.tier === p.tier - 1);
+    if (prev && !KL.hasPerk(s, prev.id)) return 'locked';
+    return s.chef.points > 0 ? 'available' : 'nopoints';
+  };
+  KL.unlockPerk = function (s, id) {
+    const p = KL.byId(KL.PERKS, id);
+    if (!p || KL.perkState(s, p) !== 'available') return false;
+    s.chef.points--;
+    s.chef.perks.push(id);
+    if (id === 'messer') s.chef.tech = Math.min(100, s.chef.tech + 6);
+    if (id === 'neugier') s.chef.crea = Math.min(100, s.chef.crea + 6);
+    if (id === 'ansage') s.chef.lead = Math.min(100, s.chef.lead + 6);
+    return true;
+  };
+
   KL.genStaff = function (s, role, fixedSkill) {
-    const starBoost = (s.stars || 0) * 6;
+    const starBoost = (s.stars || 0) * 6 + (s.chef && KL.hasPerk(s, 'netzwerk') ? 6 : 0);
     const skill = Math.round(fixedSkill != null ? fixedSkill : clamp(rnd(28, 66) + (s.rep || 0) * 0.25 + starBoost, 20, 96));
     const r = KL.ROLES[role];
     const wage = Math.round((r.wage * (0.55 + skill / 100) * rnd(0.92, 1.1)) / 10) * 10;
@@ -140,6 +186,7 @@
     let combo = 0;
     if (classic) combo += 12;
     if (bold) combo += 9;
+    if (KL.hasPerk(s, 'saucier') && ['jus', 'beurreblanc', 'nussbutter', 'dashi'].includes(a.id)) combo += 6;
     // Handwerkliche Fehlgriffe
     if (t.id === 'dryaged' && p.cat !== 'fleisch') { combo -= 14; notes.push('Dry-Aged ohne Fleisch?'); }
     if (t.id === 'roh' && p.cat === 'fleisch' && p.id !== 'faerse') { combo -= 12; notes.push('Roh? Bei diesem Produkt riskant'); }
@@ -151,6 +198,7 @@
     if (s.flags.forager && ['wildkraeuter', 'fichte', 'sauerampfer'].includes(a.id)) crea += 6;
     const kreativ = s.team.some((m) => m.trait === 'kreativ');
     if (kreativ) crea += 4;
+    if (bold && KL.hasPerk(s, 'avantgarde')) crea += 10;
     const creativity = Math.round(clamp(crea, 0, 100));
     const difficulty = clamp(t.diff + x.diff + (p.wow >= 4 ? 1 : 0), 1, 5);
 
@@ -171,10 +219,11 @@
   };
 
   /* ---------- Kennzahlen ---------- */
-  KL.seats = (s) => KL.byId(KL.LOCATIONS, s.location).seats + (s.interior.includes('chefstable') ? 6 : 0);
+  KL.seats = (s) => KL.layoutStats(s).seats + (s.interior.includes('chefstable') ? 6 : 0);
   KL.ambience = (s) => {
     const loc = KL.byId(KL.LOCATIONS, s.location);
-    return clamp(22 + loc.prestige + s.interior.reduce((sum, id) => sum + KL.byId(KL.INTERIOR, id).amb, 0), 0, 100);
+    const ls = KL.layoutStats(s);
+    return clamp(16 + loc.prestige + ls.decor - ls.crowd + s.interior.reduce((sum, id) => sum + KL.byId(KL.INTERIOR, id).amb, 0), 0, 100);
   };
 
   KL.kitchen = function (s, coversPerDay, courses) {
@@ -197,6 +246,11 @@
     if (!cooks.some((m) => m.role === 'spueler')) { strength -= 12; notes.push('Kein Spüler – Chaos an der Spüle'); }
     if (!cooks.some((m) => m.role === 'patissier') && s.menu.some((id) => { const d = s.dishes.find((x) => x.id === id); return d && KL.byId(KL.PRODUCTS, d.product).type === 'dessert'; })) { strength -= 4; notes.push('Kein Patissier für die Desserts'); }
     if (load > 1.15) notes.push('Küche unterbesetzt');
+    // Jede*r am Herd braucht einen Arbeitsplatz
+    const ls = KL.layoutStats(s);
+    const workers = 1 + cooks.filter((m) => m.role !== 'spueler').length;
+    if (workers > ls.stations) { strength *= Math.sqrt(ls.stations / workers); notes.push(`Zu wenig Arbeitsplätze (${ls.stations} für ${workers} Köch*innen) – bau Posten in die Küche`); }
+    if (!s.layout.some((i) => i.type === 'spuele')) { strength -= 8; notes.push('Keine Spülstation'); }
     return { strength: clamp(Math.round(strength), 5, 100), load, hands, needed, notes };
   };
 
@@ -250,7 +304,7 @@
     if (desserts > 2) { harmony -= 5; issues.push('Zu viele süße Gänge.'); }
     if (evals.length < 4) issues.push('Unter vier Gängen nimmt dich der Guide kaum ernst.');
     // Signature-Gericht: ausgereift und eigenständig
-    const signature = evals.find((x) => x.d.maturity >= 80 && x.e.creativity >= 70);
+    const signature = evals.find((x) => x.d.maturity >= (KL.hasPerk(s, 'signature') ? 60 : 80) && x.e.creativity >= 70);
     if (signature) creativity += 6;
     const maturity = avg(dishes.map((d) => d.maturity));
     const difficulty = avg(evals.map((x) => x.e.difficulty));
@@ -267,7 +321,7 @@
 
   KL.pairing = function (s, menuEval, foh) {
     const stock = { ...s.cellar };
-    const bonus = s.interior.reduce((n, id) => n + (KL.byId(KL.INTERIOR, id).wine || 0), 0);
+    const bonus = s.interior.reduce((n, id) => n + (KL.byId(KL.INTERIOR, id).wine || 0), 0) + KL.layoutStats(s).wine;
     if (s.nonAlc) {
       const score = clamp(62 + foh.sommSkill * 0.25 + bonus * 0.5, 0, 100);
       return { score: Math.round(score), pours: [], nonAlc: true };
@@ -333,7 +387,7 @@
     const shortPenalty = covers ? (short / covers) * 30 : 0;
 
     // Service-Qualität
-    const energyF = s.chef.energy < 30 ? 0.88 : 1;
+    const energyF = s.chef.energy < 30 && !KL.hasPerk(s, 'unkaputtbar') ? 0.88 : 1;
     const serviceAvg = opts.service ? opts.service.avg : clamp(kitchen.strength * 0.7 + menu.maturity * 0.18 + s.chef.tech * 0.12 - (menu.difficulty - 2) * 4, 15, 96) * energyF;
     const plate = clamp(serviceAvg * 0.45 + menu.harmony * 0.25 + menu.product * 0.2 + menu.creativity * 0.1 - s.weekMods.qualityPenalty - shortPenalty, 0, 100);
     const value = clamp(50 + ((expected - s.price) / expected) * 120, 0, 100);
@@ -345,7 +399,7 @@
     const menuRevenue = covers * s.price + ctSeats * s.price * 0.4;
     const pairingRevenue = covers * pairingTake * s.pairingPrice;
     const nonAlcCost = pairing.nonAlc ? covers * pairingTake * 6 : 0;
-    const extras = covers * (8 + amb * 0.08); // Aperitif, Wasser, Kaffee
+    const extras = covers * (8 + amb * 0.08 + KL.layoutStats(s).extras); // Aperitif, Wasser, Kaffee, Bar
     const revenue = menuRevenue + pairingRevenue + extras;
 
     const wages = s.team.reduce((n, m) => n + m.wage, 0);
@@ -373,7 +427,7 @@
       technik: clamp(svc.avg * 0.45 + (svc.inspectorAvg ?? svc.avg) * 0.35 + c.kitchen.strength * 0.2 - s.weekMods.qualityPenalty, 0, 100),
       harmonie: c.menu.harmony,
       persoenlichkeit: c.menu.creativity,
-      bestaendigkeit: clamp(c.menu.maturity * 0.45 + (100 - svc.missRate * 160) * 0.35 + c.kitchen.strength * 0.2 + (s.equipment.includes('sousvide') ? 4 : 0) + (s.team.some((m) => m.trait === 'perfektion') ? 3 : 0), 0, 100),
+      bestaendigkeit: clamp(c.menu.maturity * 0.45 + (100 - svc.missRate * 160) * 0.35 + c.kitchen.strength * 0.2 + (s.equipment.includes('sousvide') ? 4 : 0) + (s.team.some((m) => m.trait === 'perfektion') ? 3 : 0) + (KL.hasPerk(s, 'praezision') ? 6 : 0), 0, 100),
     };
     if (c.menu.courses < 4) Object.keys(crit).forEach((k) => (crit[k] *= 0.8));
     Object.keys(crit).forEach((k) => (crit[k] = Math.round(crit[k])));
@@ -404,7 +458,7 @@
     // Ruf und Buzz
     const repBefore = s.rep;
     s.rep = clamp(s.rep + (c.sat - 4 - s.rep) * 0.14 + (c.covers > 0 ? 0 : -1), 0, 100);
-    s.buzz = Math.max(0, s.buzz * 0.78);
+    s.buzz = Math.max(0, s.buzz * 0.78) + (KL.hasPerk(s, 'charisma') ? 3 : 0);
     report.repDelta = s.rep - repBefore;
 
     // Rezensionen
@@ -448,7 +502,7 @@
       if (KL.ROLES[m.role].area === 'kueche' && c.kitchen.load > 1.2) d -= 5;
       if (m.trait === 'perfektion' && service && service.missRate > 0.25) d -= 4;
       m.morale = clamp(m.morale + d, 0, 100);
-      if (m.weeks % 2 === 0) m.skill = Math.min(95, m.skill + 1);
+      if (m.weeks % 2 === 0 || KL.hasPerk(s, 'mentor')) m.skill = Math.min(95, m.skill + 1);
       if (m.morale < 22 && Math.random() < 0.45) leaving.push(m);
     });
     leaving.forEach((m) => {
@@ -457,7 +511,7 @@
     });
 
     // Chef*in
-    s.chef.energy = clamp(s.chef.energy - (4 + s.openDays * 2.6) + 8 + (s.team.some((m) => m.role === 'souschef') ? 3 : 0) + (service && service.delegated ? 5 : 0), 0, 100);
+    s.chef.energy = clamp(s.chef.energy - (4 + s.openDays * 2.6) * (KL.hasPerk(s, 'lunge') ? 0.75 : 1) + 8 + (KL.hasPerk(s, 'powernap') ? 6 : 0) + (s.team.some((m) => m.role === 'souschef') ? 3 : 0) + (service && service.delegated ? 5 : 0), 0, 100);
     if (service && !service.delegated) s.chef.tech = Math.min(100, s.chef.tech + 0.5);
     s.chef.lead = Math.min(100, s.chef.lead + 0.3);
 
@@ -488,10 +542,23 @@
     // Jahresende → Guide-Verleihung
     if (wiy === KL.WEEKS_PER_YEAR && !s.gameOver) s.ceremony = KL.guideAward(s);
 
+    // Erfahrung
+    let xp = 25;
+    if (service && !service.delegated) {
+      xp += 40 + (service.perfect || 0) * 3;
+      s.stats.servicesPlayed++;
+      s.stats.perfectTotal += service.perfect || 0;
+      s.stats.bestPerfect = Math.max(s.stats.bestPerfect, service.perfect || 0);
+    }
+    if (report.inspected) xp += 30;
+    report.xp = xp;
+    KL.gainXP(s, xp);
+
     s.lastReport = report;
     s.week++;
     if (s.ceremony) { s.year++; KL.planInspections(s); }
     KL.refreshCandidates(s);
+    report.quests = KL.checkQuests(s);
     s.orderCovers = Math.max(10, Math.round(c.covers * 1.05) || s.orderCovers);
     // Ereignis für die nächste Woche
     const pool = KL.EVENTS.filter((e) => e.cond(s) && e.id !== s.flags.lastEvent);
@@ -610,7 +677,7 @@
   };
 
   /* ---------- Speichern ---------- */
-  const KEY = 'kitchen-legends-save-v1';
+  const KEY = 'kitchen-legends-save-v2';
   KL.save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* Speicher nicht verfügbar */ } };
   KL.load = () => { try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } };
   KL.wipe = () => { try { localStorage.removeItem(KEY); } catch (e) { /* ignorieren */ } };

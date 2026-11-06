@@ -11,10 +11,11 @@
         <div class="intro-hero">
           <span class="eyebrow">Eine Simulation über Feuer, Schulden und Sterne</span>
           <h1 class="logo">Kitchen<br><em>Legends</em></h1>
-          <p class="lede">Vom Hinterhof mit Kredit und kaputter Spülmaschine bis zu drei Sternen im Guide Céleste. Entwickle Teller, führe eine Brigade, kauf Wein, rechne knallhart – und triff am Pass den Garpunkt, wenn die Inspektoren am Tisch sitzen.</p>
+          <p class="lede">Vom Hinterhof mit Kredit und kaputter Spülmaschine bis zu drei Sternen im Guide Céleste. Bau dein Restaurant Tisch für Tisch, entwickle Teller, führe eine Brigade, kauf Wein, rechne knallhart – und triff am Pass den Garpunkt, während die Gäste vor deinen Augen essen und irgendwo ein Inspektor sitzt.</p>
           <ul class="intro-facts">
             <li><b>5</b> Kriterien der Inspektoren</li>
             <li><b>12</b> Wochen pro Guide-Jahr</li>
+            <li><b>16</b> Talente für deine Köchin oder deinen Koch</li>
             <li><b>1</b> Anruf, der alles ändert</li>
           </ul>
         </div>
@@ -61,17 +62,18 @@
         const s = KL.newGame({ chefName, restaurantName, archetype: pick.archetype, location: pick.location });
         KL.save(s);
         KL.UI.mount(s);
-        KL.UI.toast(`Willkommen im ${restaurantName}. Erster Blick: die Zentrale.`, 'good');
+        KL.UI.toast(`Willkommen im ${restaurantName}. Schau dich um.`, 'good');
       };
     };
     draw();
   };
 
   KL.boot = function (fresh, hotData) {
-    document.querySelectorAll('.modal-wrap, .pass-overlay, .ceremony').forEach((n) => n.remove());
+    document.querySelectorAll('.modal-wrap, .evening, .ceremony').forEach((n) => n.remove());
     document.body.classList.remove('no-scroll');
     const saved = fresh ? null : (hotData && hotData.state) || KL.load();
-    if (saved && saved.v === 1 && !saved.gameOver) {
+    if (saved && saved.v === 2 && !saved.gameOver) {
+      if (!saved.layout) KL.initLayout(saved);
       KL.UI.mount(saved);
       if (saved.ceremony) KL.UI.showCeremony(saved.ceremony, () => { saved.ceremony = null; KL.save(saved); KL.UI.render(); });
     } else {

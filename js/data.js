@@ -395,3 +395,46 @@ KL.EVENTS = [
 
 KL.byId = (arr, id) => arr.find((x) => x.id === id);
 KL.bestCook = (s) => s.team.filter((m) => KL.ROLES[m.role].area === 'kueche' && m.trait !== 'loyal').sort((a, b) => b.skill - a.skill)[0];
+
+/* ---------- RPG: Talente und Quests ---------- */
+KL.PERK_TREES = [
+  { id: 'handwerk', name: 'Handwerk', stat: 'Technik' },
+  { id: 'handschrift', name: 'Handschrift', stat: 'Kreativität' },
+  { id: 'gastgeber', name: 'Gastgeber', stat: 'Führung' },
+  { id: 'ausdauer', name: 'Ausdauer', stat: 'Energie' },
+];
+KL.PERKS = [
+  { id: 'messer', tree: 'handwerk', tier: 1, name: 'Messerarbeit', desc: '+6 Technik.' },
+  { id: 'saucier', tree: 'handwerk', tier: 2, name: 'Saucier', desc: '+6 Harmonie für Gerichte mit Jus, Beurre blanc, Nussbutter oder Dashi.' },
+  { id: 'garpunkt', tree: 'handwerk', tier: 3, name: 'Garpunkt-Instinkt', desc: 'Die perfekte Zone am Pass ist 25 % breiter.' },
+  { id: 'praezision', tree: 'handwerk', tier: 4, name: 'Präzision', desc: '+6 Beständigkeit bei jeder Inspektion.' },
+  { id: 'neugier', tree: 'handschrift', tier: 1, name: 'Neugier', desc: '+6 Kreativität.' },
+  { id: 'fermentation', tree: 'handschrift', tier: 2, name: 'Fermentations-Nerd', desc: '„Fermentiert“ geht auch ohne Fermentationskammer.' },
+  { id: 'signature', tree: 'handschrift', tier: 3, name: 'Signature-Denken', desc: 'Signature-Gericht schon ab 60 % Reife.' },
+  { id: 'avantgarde', tree: 'handschrift', tier: 4, name: 'Avantgarde', desc: '+10 Kreativität für mutige Kombinationen.' },
+  { id: 'ansage', tree: 'gastgeber', tier: 1, name: 'Klare Ansage', desc: '+6 Führung. Die Brigade zieht mit.' },
+  { id: 'mentor', tree: 'gastgeber', tier: 2, name: 'Mentor*in', desc: 'Dein Team lernt doppelt so schnell.' },
+  { id: 'charisma', tree: 'gastgeber', tier: 3, name: 'Charisma', desc: '+3 Buzz pro Woche. Die Leute reden über dich.' },
+  { id: 'netzwerk', tree: 'gastgeber', tier: 4, name: 'Netzwerk', desc: 'Alle Lieferanten sofort verfügbar, bessere Bewerbungen.' },
+  { id: 'lunge', tree: 'ausdauer', tier: 1, name: 'Eiserne Lunge', desc: '25 % weniger Energieverlust pro Woche.' },
+  { id: 'adrenalin', tree: 'ausdauer', tier: 2, name: 'Adrenalin', desc: 'Bons warten 30 % länger, bevor die Brigade übernimmt.' },
+  { id: 'powernap', tree: 'ausdauer', tier: 3, name: 'Powernap', desc: '+6 Energie jede Woche.' },
+  { id: 'unkaputtbar', tree: 'ausdauer', tier: 4, name: 'Unkaputtbar', desc: 'Keine Qualitätsverluste bei niedriger Energie.' },
+];
+
+// Quests: check(s) → true, wenn erfüllt
+KL.QUESTS = [
+  { id: 'q_first', name: 'Feuertaufe', desc: 'Spiel deinen ersten Service selbst am Pass.', xp: 60, check: (s) => s.stats.servicesPlayed >= 1 },
+  { id: 'q_dish', name: 'Eigene Handschrift', desc: 'Entwickle 3 eigene Gerichte in der Testküche.', xp: 60, check: (s) => s.stats.dishesCreated >= 3 },
+  { id: 'q_bold', name: 'Mutprobe', desc: 'Entdecke eine mutige Kombination.', xp: 80, check: (s) => s.discovered.length >= 1 },
+  { id: 'q_tables', name: 'Mehr Plätze', desc: 'Bau dein Restaurant auf 24 Plätze aus.', xp: 60, check: (s) => KL.layoutStats(s).seats >= 24 },
+  { id: 'q_somm', name: 'Die Weinfrage', desc: 'Stell eine*n Sommelier*e ein.', xp: 60, check: (s) => s.team.some((m) => m.role === 'sommelier') },
+  { id: 'q_perfect', name: 'Zwölf Volltreffer', desc: '12 perfekte Teller an einem Abend.', xp: 120, check: (s) => s.stats.bestPerfect >= 12 },
+  { id: 'q_rep', name: 'Stadtgespräch', desc: 'Erreiche Ruf 50.', xp: 120, check: (s) => s.rep >= 50 },
+  { id: 'q_regional', name: 'Wurzeln', desc: 'Alle vier Warengruppen von regionalen Lieferanten.', xp: 80, check: (s) => Object.values(s.suppliers).every((id) => KL.byId(KL.SUPPLIERS, id).regional) },
+  { id: 'q_menu8', name: 'Die große Reise', desc: 'Biete ein 8-Gänge-Menü an.', xp: 100, check: (s) => s.menu.length >= 8 },
+  { id: 'q_rec', name: 'Im Guide', desc: 'Werde vom Guide Céleste empfohlen.', xp: 150, check: (s) => s.stars >= 0.5 },
+  { id: 'q_star', name: 'Der erste Stern', desc: 'Hol dir einen Stern.', xp: 400, check: (s) => s.stars >= 1 },
+  { id: 'q_star2', name: 'Einen Umweg wert', desc: 'Zwei Sterne.', xp: 800, check: (s) => s.stars >= 2 },
+  { id: 'q_star3', name: 'Legende', desc: 'Drei Sterne. Eine eigene Reise wert.', xp: 1500, check: (s) => s.stars >= 3 },
+];

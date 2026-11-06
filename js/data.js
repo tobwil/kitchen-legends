@@ -446,3 +446,53 @@ KL.QUESTS.push(
   { id: 'q_greta', giver: 'Greta', name: 'Der Wald auf dem Teller', desc: 'Setz ein Gericht mit Wildkräutern, Fichtennadel oder Sauerampfer auf die Karte.', xp: 120, check: (s) => s.flags.q_greta && KL.menuDishes(s).some((d) => ['wildkraeuter', 'fichte', 'sauerampfer'].includes(d.accent)), reward: (s) => { s.chef.crea = Math.min(100, s.chef.crea + 3); } },
   { id: 'q_mira', giver: 'Mira', name: 'Überrasch mich', desc: 'Biete ein Gericht mit Kreativität 80 oder mehr an.', xp: 150, check: (s) => s.flags.q_mira && KL.menuDishes(s).some((d) => KL.evalDish(s, d).creativity >= 80), reward: (s) => { s.buzz += 15; s.news.unshift({ week: s.week, text: 'Mira Haddad schreibt im Stadtmagazin über dich. Das Telefon klingelt.' }); } },
 );
+
+/* ---------- Stadtkarte: Viertel und freie Ladenlokale ---------- */
+// foot = Laufkundschaft, spend = Aufschlag auf die Preisbereitschaft (€), buzz = Grundrauschen,
+// compete = Nachfrage-Abzug durch Konkurrenz (wird mit Ruf kleiner), starPull = wie stark Sterne ziehen,
+// mood = Ambiente-Bonus der Lage, supQ = Qualitätsbonus je Warengruppe
+KL.DISTRICTS = [
+  { id: 'kreuzkiez', name: 'Kreuzkiez', vibe: 'Laut, jung, Street Art', desc: 'Späti an jeder Ecke, Schlangen vor den Bars. Hier wird über Essen geredet – laut und auf Instagram. Teuer darf es aber nicht sein.',
+    foot: 1.15, spend: -12, buzz: 14, compete: 0.78, starPull: 1, mood: 2, supQ: {}, color: '#c4553b', x: 34, y: 58,
+    stats: { foot: 4, spend: 2, scene: 5, compete: 5, rent: 2 },
+    sites: [
+      { id: 'kk-hof', type: 'hinterhof', name: 'Remise im Hinterhof', rent: 1050, prestige: 0, note: 'Graffiti im Treppenhaus, Linde im Hof.' },
+      { id: 'kk-eck', type: 'altbau', name: 'Eckladen an der Kreuzung', rent: 2100, prestige: 6, note: 'Große Fenster, Lärm bis 2 Uhr.' },
+    ] },
+  { id: 'altstadt', name: 'Altstadt-Ufer', vibe: 'Touristisch, Kopfstein, Flussblick', desc: 'Busse voller Gäste, die einmal kommen und nie wieder. Viel Laufkundschaft, wenig Stammgäste – der Ruf wächst langsamer.',
+    foot: 1.3, spend: 6, buzz: 6, compete: 0.82, starPull: 0.9, mood: 8, supQ: {}, repSlow: 0.75, color: '#d4a24c', x: 58, y: 40,
+    stats: { foot: 5, spend: 3, scene: 2, compete: 4, rent: 4 },
+    sites: [
+      { id: 'as-ufer', type: 'altbau', name: 'Fachwerkhaus am Ufer', rent: 2600, prestige: 12, note: 'Terrasse zum Fluss möglich.' },
+      { id: 'as-hotel', type: 'hotel', name: 'Dependance im Hotel am Markt', rent: 3900, prestige: 16, note: 'Hotelgäste als Grundauslastung.' },
+    ] },
+  { id: 'lindenhain', name: 'Am Lindenhain', vibe: 'Villen, still, alte Bäume', desc: 'Wenig Laufkundschaft, aber wer kommt, zahlt. Die Nachbarschaft erwartet Stil – ein schäbiger Gastraum fällt sofort auf.',
+    foot: 0.75, spend: 38, buzz: 2, compete: 0.95, starPull: 1.15, mood: 6, supQ: {}, ambWeight: 1.5, color: '#5f7d55', x: 22, y: 26,
+    stats: { foot: 1, spend: 5, scene: 1, compete: 1, rent: 4 },
+    sites: [
+      { id: 'lh-villa', type: 'altbau', name: 'Gründerzeit-Villa', rent: 2900, prestige: 18, note: 'Kronleuchter inklusive.' },
+      { id: 'lh-orangerie', type: 'hotel', name: 'Orangerie im Park', rent: 3600, prestige: 20, note: 'Glasdach, Gartenblick.' },
+    ] },
+  { id: 'hafen', name: 'Hafenquartier', vibe: 'Rau, im Wandel, Möwen', desc: 'Lagerhallen, Kräne, die ersten Galerien. Billig – und mit jedem Jahr kommen mehr Leute mit Geld. Der Fisch kommt direkt vom Kutter.',
+    foot: 0.85, spend: -6, buzz: 8, compete: 0.95, starPull: 1.1, mood: -2, supQ: { fisch: 8 }, growth: 6, fishRep: 10, color: '#3f6d8a', x: 78, y: 70,
+    stats: { foot: 2, spend: 2, scene: 3, compete: 1, rent: 1 },
+    sites: [
+      { id: 'hf-halle', type: 'hotel', name: 'Alte Fischhalle', rent: 1700, prestige: 4, note: 'Riesig, Backstein, Hallendach.' },
+      { id: 'hf-kontor', type: 'hinterhof', name: 'Kontor an der Kaimauer', rent: 900, prestige: 2, note: 'Klein, zugig, Blick auf die Elbe.' },
+    ] },
+  { id: 'mitte', name: 'Bankenviertel', vibe: 'Glas, Anzüge, Spesenkonten', desc: 'Mittags voll, abends Geschäftsessen mit Kreditkarte. Hohe Preise gehen durch, Experimente eher nicht.',
+    foot: 1.0, spend: 26, buzz: 4, compete: 0.85, starPull: 1, mood: 0, supQ: {}, creaPenalty: 6, color: '#7d868d', x: 62, y: 18,
+    stats: { foot: 3, spend: 5, scene: 2, compete: 3, rent: 5 },
+    sites: [
+      { id: 'mi-turm', type: 'hotel', name: 'Erdgeschoss im Glasturm', rent: 4300, prestige: 14, note: 'Klimaanlage, Lounge, null Charme.' },
+      { id: 'mi-passage', type: 'altbau', name: 'Ladenlokal in der Passage', rent: 3000, prestige: 8, note: 'Laufweg der Banker.' },
+    ] },
+  { id: 'land', name: 'Uckermark-Land', vibe: 'Dorf, Felder, eine Stunde raus', desc: 'Kaum jemand kommt zufällig vorbei. Aber Sterne-Gäste fahren für dich raus – und die Bauern stehen vor der Tür.',
+    foot: 0.55, spend: 0, buzz: 0, compete: 1, starPull: 1.5, mood: 10, supQ: { gemuese: 10, fleisch: 6 }, green: true, color: '#9a8a4a', x: 12, y: 80,
+    stats: { foot: 1, spend: 3, scene: 1, compete: 0, rent: 1 },
+    sites: [
+      { id: 'la-gasthof', type: 'altbau', name: 'Alter Landgasthof', rent: 800, prestige: 10, note: 'Kachelofen, Dorflinde, Pferde.' },
+      { id: 'la-scheune', type: 'hotel', name: 'Umgebaute Scheune', rent: 1300, prestige: 12, note: 'Holz, Licht, endlos Platz.' },
+    ] },
+];
+KL.siteById = (id) => { for (const d of KL.DISTRICTS) { const s = d.sites.find((x) => x.id === id); if (s) return { site: s, district: d }; } return null; };

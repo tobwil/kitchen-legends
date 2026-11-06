@@ -371,6 +371,7 @@
       this.cars.forEach((c) => { c.x += c.v * dt; if (c.x > 17) c.x = -2; if (c.x < -2) c.x = 17; });
     }
     draw() {
+      if (this.view3d) { if (this.overlay) this.overlay(null); this.view3d.frame(); return; }
       const c = this.ctx;
       const L = KL.todPreset(this.tod);
       const todKey = Math.round(this.tod * 40);
@@ -532,6 +533,8 @@
         const p = ptile();
         const list = opts.targets();
         near = list.find((t) => (t.person ? Math.abs(t.px - player.x) + Math.abs(t.py - player.y) < 1.3 : adjacent(t, p))) || null;
+        world.near = near;
+        if (!c) { if (opts.overlay) opts.overlay(null); return; }
         // Markierung unter der Spielfigur
         const [hx, hy] = world.P(player.x, player.y, 0);
         c.save();

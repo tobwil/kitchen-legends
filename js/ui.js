@@ -11,6 +11,22 @@
   };
   KL.fmt = { eur, pct, esc, starGlyphs };
 
+  const svg = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  KL.ICONS = {
+    home: svg('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'),
+    city: svg('<path d="M3 21V9l5-3v15"/><path d="M8 21V4l7 3v14"/><path d="M15 21v-9l6 2v7"/><path d="M2 21h20"/>'),
+    hammer: svg('<path d="M14 6l4 4"/><path d="M3 21l9-9"/><path d="M11 4l5-1 5 5-1 5-3-3-3 1-4-4 1-3z"/>'),
+    pot: svg('<path d="M4 10h16v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M2 10h20"/><path d="M9 6c0-2 2-2 2-4M13 6c0-2 2-2 2-4"/>'),
+    menu: svg('<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 8h6M9 12h6M9 16h4"/>'),
+    crate: svg('<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>'),
+    bottle: svg('<path d="M10 2h4v4l2 3v12a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z"/><path d="M8 13h8"/>'),
+    people: svg('<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15 15c3 0 6 1.5 6 4.5"/>'),
+    brush: svg('<path d="M14 4l6 6-7 7-6-6z"/><path d="M7 11l-3 3c-1 1-1 4-1 6 2 0 5 0 6-1l3-3"/>'),
+    person: svg('<circle cx="12" cy="7" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>'),
+    star: svg('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
+    flame: svg('<path d="M12 22c4 0 7-3 7-7 0-5-5-7-5-12-3 2-4 5-4 7-1-1-2-2-2-4-2 2-3 5-3 9 0 4 3 7 7 7z"/>'),
+  };
+
   const TABS = [
     { id: 'restaurant', label: 'Restaurant' },
     { id: 'chef', label: 'Chef*in' },
@@ -26,6 +42,7 @@
   const UI = {
     s: null,
     tab: 'restaurant',
+    camState: {},
     build: { on: false, type: null, moving: null, sel: null },
     scene: 'restaurant',
     playerPos: {},
@@ -44,12 +61,9 @@
       if (this.s.levelUps && !this.busy) setTimeout(() => this.showLevelUp(), 300);
     },
     setTab(id) {
-      this.tab = id;
-      try { localStorage.setItem('kl-tab', id); } catch (e) { /* egal */ }
+      this.tab = this.tab === id && id !== 'restaurant' ? 'restaurant' : id;
+      try { localStorage.setItem('kl-tab', this.tab); } catch (e) { /* egal */ }
       this.render();
-      const main = document.getElementById('main');
-      if (main) main.scrollTop = 0;
-      window.scrollTo({ top: 0 });
     },
 
     toast(text, kind) {
@@ -61,22 +75,25 @@
       setTimeout(() => t.remove(), 2700);
     },
 
+    // Die 3D-Bühne bleibt stehen, nur die Spieloberfläche darüber wird neu gezeichnet
     render() {
       const s = this.s;
       const app = document.getElementById('app');
       const f = KL.forecast(s);
       this.f = f;
-      const wiy = KL.weekOfYear(s);
-      app.innerHTML = `
+      if (!app.querySelector('.game')) app.innerHTML = '<div class="game"><div class="stage" id="stage"></div><div class="ui" id="ui"></div></div>';
+      const ui = app.querySelector('#ui');
+      const tab = TABS.find((t) => t.id === this.tab);
+      const panel = this.tab !== 'restaurant' && tab;
+      ui.innerHTML = `
         ${this.header(s)}
-        <nav class="tabs" aria-label="Bereiche">
-          ${TABS.map((t) => `<button type="button" class="tab ${t.id === this.tab ? 'on' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}
-          <button type="button" class="tab service-cta" data-act="service">Service starten →</button>
-        </nav>
-        <main id="main" class="main">${this[this.tab](s, f)}</main>
-        <footer class="foot"><span>Kitchen Legends · Prototyp</span><button class="linkish" type="button" data-act="newgame">Neues Spiel</button></footer>`;
-      app.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tab)));
-      this.bind(app);
+        ${this.sceneOverlay(s, f)}
+        ${panel ? `<section class="gwin" role="dialog" aria-label="${tab.label}">
+          <header class="gwin-head"><h2>${tab.label}</h2><button type="button" class="gwin-x" data-act="closepanel" aria-label="Fenster schließen">×</button></header>
+          <div class="gwin-body">${this[this.tab](s, f)}</div>
+        </section>` : ''}
+        ${this.dock(s)}`;
+      this.bind(ui);
       this.mountWorld();
       this.mountPortrait();
       if (s.pendingEvent && !this.busy) this.showEvent();
@@ -85,31 +102,98 @@
     header(s) {
       const wiy = KL.weekOfYear(s);
       const dist = s.district ? KL.byId(KL.DISTRICTS, s.district) : null;
+      const chip = (label, value, cls) => `<div class="res ${cls || ''}"><span>${label}</span><b>${value}</b></div>`;
       return `
-        <header class="topbar">
-          <div class="brand">
-            <span class="eyebrow">${esc(s.chef.name)} · ${esc(KL.byId(KL.LOCATIONS, s.location).name)}${dist ? ' · ' + esc(dist.name) : ''}</span>
+        <header class="hud-top">
+          <div class="plaque">
+            <span class="eyebrow">${esc(s.chef.name)}${dist ? ' · ' + esc(dist.name) : ''}</span>
             <h1>${esc(s.name)} ${starGlyphs(s.stars)}${s.green ? '<span class="green-star" title="Grüner Stern">✦</span>' : ''}</h1>
             <button type="button" class="lvl" data-tab-go="chef" title="Charakter öffnen">Level ${s.chef.level}${s.chef.points ? ` · <b>${s.chef.points} Talentpunkt${s.chef.points > 1 ? 'e' : ''}</b>` : ''}<span class="xpbar"><i style="width:${(s.chef.xp / KL.xpFor(s.chef.level)) * 100}%"></i></span></button>
           </div>
-          <dl class="kpis">
-            <div><dt>Konto</dt><dd class="${s.money < 0 ? 'neg' : ''}">${eur(s.money)}</dd></div>
-            <div><dt>Ruf</dt><dd>${Math.round(s.rep)}<small>/100</small></dd></div>
-            <div><dt>Buzz</dt><dd>${Math.round(s.buzz)}</dd></div>
-            <div><dt>Energie</dt><dd class="${s.chef.energy < 30 ? 'neg' : ''}">${Math.round(s.chef.energy)}<small>%</small></dd></div>
-            <div><dt>Jahr ${s.year} · ${KL.season(s).name}</dt><dd>Woche ${wiy}<small>/${KL.WEEKS_PER_YEAR}</small></dd></div>
-          </dl>
+          <div class="resbar">
+            ${chip('Konto', eur(s.money), s.money < 0 ? 'neg' : '')}
+            ${chip('Ruf', Math.round(s.rep))}
+            ${chip('Buzz', Math.round(s.buzz))}
+            ${chip('Energie', Math.round(s.chef.energy) + ' %', s.chef.energy < 30 ? 'neg' : '')}
+            ${chip(`${KL.season(s).name} · Jahr ${s.year}`, `Woche ${wiy}/${KL.WEEKS_PER_YEAR}`)}
+            <button type="button" class="res menu-btn" data-act="newgame" title="Neues Spiel">Neu</button>
+          </div>
         </header>`;
     },
 
     refreshTop() {
-      const h = document.querySelector('#app > .topbar');
+      const h = document.querySelector('#ui > .hud-top');
       if (!h) return;
       const tmp = document.createElement('div');
       tmp.innerHTML = this.header(this.s);
       const nh = tmp.firstElementChild;
       h.replaceWith(nh);
-      nh.querySelectorAll('[data-tab-go]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tabGo)));
+      this.bind(nh);
+    },
+
+    dock(s) {
+      const I = KL.ICONS;
+      const btn = (id, label, icon, extra = '') => `<button type="button" class="dk ${this.tab === id ? 'on' : ''}" data-tab="${id}" title="${label}">${icon}<span>${label}</span>${extra}</button>`;
+      const kiez = this.scene === 'kiez';
+      return `
+        <nav class="dock" aria-label="Werkzeuge">
+          <button type="button" class="dk" data-act="${kiez ? 'gohome' : 'gokiez'}">${kiez ? I.home : I.city}<span>${kiez ? 'Restaurant' : 'Kiez'}</span></button>
+          ${kiez ? '' : `<button type="button" class="dk ${this.build.on ? 'on' : ''}" data-act="buildtoggle">${I.hammer}<span>Bauen</span></button>`}
+          <i class="dk-sep" aria-hidden="true"></i>
+          ${btn('testkueche', 'Testküche', I.pot)}
+          ${btn('menue', 'Menü', I.menu)}
+          ${btn('einkauf', 'Einkauf', I.crate)}
+          ${btn('wein', 'Keller', I.bottle)}
+          ${btn('team', 'Brigade', I.people)}
+          ${btn('raum', 'Renovieren', I.brush)}
+          ${btn('chef', 'Chef*in', I.person, s.chef.points ? `<em class="badge">${s.chef.points}</em>` : '')}
+          ${btn('zentrale', 'Guide', I.star)}
+          <i class="dk-sep" aria-hidden="true"></i>
+          <button type="button" class="dk service" data-act="service">${I.flame}<span>Service</span></button>
+        </nav>`;
+    },
+
+    sceneOverlay(s, f) {
+      if (this.scene === 'kiez') {
+        const places = [['ralf', 'Großmarkt'], ['hanne', 'Markthalle'], ['clement', 'Lieferwagen'], ['jens', 'Hafen'], ['greta', 'Park'], ['ines', 'Weinhandlung'], ['kalle', 'Kneipe'], ['albers', 'Bank'], ['mira', 'Café']];
+        const open = KL.QUESTS.filter((q) => q.giver && s.flags[q.id] && !s.quests.includes(q.id));
+        return `
+          <aside class="card left">
+            <span class="eyebrow">${KL.season(s).name} · Nachmittag im Kiez</span>
+            <ul class="places">${places.map(([id, place]) => `<li><button type="button" class="linkish" data-act="walkto" data-id="${id}"><b>${esc(KL.NPCS[id].name)}</b> · ${place}</button></li>`).join('')}</ul>
+            ${open.length ? `<span class="eyebrow">Offene Aufträge</span><ul class="places">${open.map((q) => `<li><b>${esc(q.name)}</b><small>${esc(q.giver)}: ${esc(q.desc)}</small></li>`).join('')}</ul>` : ''}
+          </aside>
+          <p class="hint-chip">Klick auf Personen und Türen · <kbd>E</kbd> ansprechen · Ziehen dreht die Kamera · Rad zoomt</p>`;
+      }
+      if (this.build.on) {
+        const ls = KL.layoutStats(s);
+        const b = this.build;
+        const workers = 1 + s.team.filter((m) => KL.ROLES[m.role].area === 'kueche' && m.role !== 'spueler').length;
+        const group = (zone, title) => `<span class="eyebrow">${title}</span><div class="palette">${Object.entries(KL.FURN).filter(([, x]) => x.zone === zone && !x.fixed).map(([id, x]) => {
+          const owned = x.eq && s.equipment.includes(x.eq);
+          return `<button type="button" class="pal ${b.type === id && !b.moving ? 'on' : ''}" data-act="pickfurn" data-id="${id}" ${owned || s.money < x.cost ? 'disabled' : ''}><b>${esc(x.name)}</b><small>${owned ? 'steht schon' : eur(x.cost)}${x.seats ? ` · ${x.seats} Plätze` : ''}${x.amb ? ` · Ambiente +${x.amb}` : ''}${x.stations ? ` · ${x.stations} Arbeitsplatz${x.stations > 1 ? 'e' : ''}` : ''}${x.wine ? ' · +Wein' : ''}</small></button>`;
+        }).join('')}</div>`;
+        const sel = b.sel ? KL.FURN[b.sel.type] : null;
+        return `
+          <aside class="card left build">
+            <div class="row between"><span class="eyebrow">Bau-Modus</span><span class="pill">${ls.seats}/${ls.cap} Plätze · Ambiente ${f.amb}</span></div>
+            ${workers > ls.stations ? `<p class="hint warn">Nur ${ls.stations} Arbeitsplätze für ${workers} Köch*innen.</p>` : ''}
+            ${ls.crowd ? `<p class="hint warn">Zu eng gestellt: Ambiente −${ls.crowd}.</p>` : ''}
+            ${group('dining', 'Gastraum')}${group('kitchen', 'Küche')}
+          </aside>
+          ${b.type ? `<div class="selbar"><span>Platzieren: <b>${esc(KL.FURN[b.type].name)}</b>${b.moving ? ' (verschieben)' : ''} · Klick auf den Boden</span><button type="button" class="btn small ghost" data-act="cancelbuild">Abbrechen</button></div>` : ''}
+          ${sel ? `<div class="selbar"><span><b>${esc(sel.name)}</b> ${sel.fixed ? '· fest eingebaut' : `· Wiederverkauf ${eur(sel.cost * 0.5)}`}</span><span class="row gap"><button type="button" class="btn small" data-act="movefurn">Verschieben</button>${sel.fixed ? '' : '<button type="button" class="btn small ghost" data-act="sellfurn">Verkaufen</button>'}<button type="button" class="btn small ghost" data-act="cancelbuild">Fertig</button></span></div>` : ''}`;
+      }
+      const items = [];
+      if (f.menu.courses < 4) items.push('Menü hat weniger als 4 Gänge');
+      f.kitchen.notes.slice(0, 2).forEach((n) => items.push(n));
+      f.menu.issues.slice(0, 1).forEach((n) => items.push(n));
+      return `
+        <aside class="card left mini-card">
+          <span class="eyebrow">Heute Abend · ca. ${Math.round(f.covers / Math.max(1, f.days))} Gäste</span>
+          ${items.length ? `<ul class="checklist">${items.slice(0, 3).map((t) => `<li class="warn">${esc(t)}</li>`).join('')}</ul>` : '<p class="small">Alles bereit. Ab an den Pass.</p>'}
+        </aside>
+        <p class="hint-chip">Klick zum Laufen · <kbd>E</kbd> benutzen · Herd = Testküche · Pass = Service · Tür = Kiez · Ziehen dreht · Rad zoomt</p>`;
     },
 
     openTab(id) { KL.Dialog.close(true); this.setTab(id); },
@@ -541,134 +625,67 @@
       </section>`;
     },
 
-    /* ---------------- RESTAURANT (Welt + Bau-Modus) ---------------- */
-    restaurant(s, f) {
-      if (this.scene === 'kiez') return this.kiez(s, f);
-      const ls = KL.layoutStats(s);
-      const b = this.build;
-      const workers = 1 + s.team.filter((m) => KL.ROLES[m.role].area === 'kueche' && m.role !== 'spueler').length;
-      const group = (zone, title) => `<h3>${title}</h3><div class="palette">${Object.entries(KL.FURN).filter(([, x]) => x.zone === zone && !x.fixed).map(([id, x]) => {
-        const owned = x.eq && s.equipment.includes(x.eq);
-        return `<button type="button" class="pal ${b.type === id && !b.moving ? 'on' : ''}" data-act="pickfurn" data-id="${id}" ${owned || s.money < x.cost ? 'disabled' : ''}>
-          <b>${esc(x.name)}</b><small>${owned ? 'steht schon' : eur(x.cost)}${x.seats ? ` · ${x.seats} Plätze` : ''}${x.amb ? ` · Ambiente +${x.amb}` : ''}${x.stations ? ` · ${x.stations} Arbeitsplatz${x.stations > 1 ? 'e' : ''}` : ''}${x.wine ? ' · +Wein' : ''}${x.extras ? ' · +Barumsatz' : ''}</small></button>`;
-      }).join('')}</div>`;
-      const sel = b.sel ? KL.FURN[b.sel.type] : null;
-      return `
-      <div class="resto">
-        <section class="resto-stage ${b.on ? 'building' : ''}">
-          <div class="stage-top">
-            <div><span class="eyebrow">${esc(KL.byId(KL.LOCATIONS, s.location).name)} · ${KL.season(s).name}</span><h2>${b.on ? (b.type ? `Platzieren: ${esc(KL.FURN[b.type].name)}${b.moving ? ' (verschieben)' : ''}` : 'Bau-Modus: Möbel antippen oder aus der Liste wählen') : 'Du bist dran: Klick irgendwohin oder lauf mit WASD'}</h2></div>
-            <div class="row gap">
-              ${b.on && (b.type || b.sel) ? '<button type="button" class="btn small ghost" data-act="cancelbuild">Abbrechen</button>' : ''}
-              <button type="button" class="btn small ${b.on ? 'heat' : ''}" data-act="buildtoggle">${b.on ? 'Fertig' : 'Bauen'}</button>
-            </div>
-          </div>
-          <div class="world-wrap"><canvas id="world-canvas" aria-label="Isometrische Ansicht deines Restaurants"></canvas></div>
-          ${b.on ? '' : '<p class="fine roam-help">Herd → Testküche · Pass → Service · Büro-Ecke → Zahlen &amp; Guide · Weinregal → Keller · Brigade antippen → Gespräch · Tür unten → raus in den Kiez. <kbd>E</kbd> benutzt, <kbd>1</kbd>–<kbd>9</kbd> wählt im Gespräch.</p>'}
-          ${sel ? `<div class="selbar"><span><b>${esc(sel.name)}</b> ${sel.fixed ? '· fest eingebaut' : `· Wiederverkauf ${eur(sel.cost * 0.5)}`}</span><span class="row gap"><button type="button" class="btn small" data-act="movefurn">Verschieben</button>${sel.fixed ? '' : '<button type="button" class="btn small ghost" data-act="sellfurn">Verkaufen</button>'}</span></div>` : ''}
-          <div class="row gap stage-cta">
-            <button class="btn heat big" type="button" data-act="service">Service am Pass spielen</button>
-            <button class="btn ghost" type="button" data-act="delegate">Souschef übernimmt (zuschauen)</button>
-          </div>
-        </section>
-        <aside class="resto-side">
-          <section class="panel">
-            <h2>Grundriss</h2>
-            <dl class="mini">
-              <div><dt>Plätze</dt><dd>${ls.seats}<small>/${ls.cap}</small></dd></div>
-              <div><dt>Ambiente</dt><dd>${f.amb}</dd></div>
-              <div><dt>Arbeitsplätze</dt><dd class="${workers > ls.stations ? 'neg' : ''}">${ls.stations}<small> für ${workers}</small></dd></div>
-              <div><dt>Gäste/Abend</dt><dd>${Math.round(f.covers / Math.max(1, f.days))}</dd></div>
-            </dl>
-            ${ls.crowd ? `<p class="hint warn">Zu eng gestellt: Ambiente −${ls.crowd}. Gäste wollen Luft.</p>` : ''}
-            ${ls.rawSeats > ls.cap ? `<p class="hint warn">Brandschutz: Mehr als ${ls.cap} Plätze sind hier nicht erlaubt.</p>` : ''}
-            ${workers > ls.stations ? '<p class="hint warn">Mehr Köch*innen als Arbeitsplätze. Bau Posten oder Geräte in die Küche.</p>' : ''}
-          </section>
-          ${b.on ? `<section class="panel build-panel">${group('dining', 'Gastraum')}${group('kitchen', 'Küche')}<p class="fine">Tische brauchen einen freien Gang zum Eingang. Verkauf bringt 50 % zurück.</p></section>` : `
-          <section class="panel">
-            <h2>Heute Abend</h2>
-            ${this.checklist(s, f)}
-            <p class="fine">Beim Service siehst du jede*n Gast. Bons, die du nicht selbst anrichtest, kocht die Brigade.</p>
-          </section>`}
-        </aside>
-      </div>`;
-    },
-
-    kiez(s, f) {
-      const dist = s.district ? KL.byId(KL.DISTRICTS, s.district) : null;
-      const places = [
-        ['ralf', 'Großmarkt', 'Günstige Ware, verlässlich'],
-        ['hanne', 'Markthalle', 'Bio-Hof, regional'],
-        ['clement', 'Feinkost-Lieferwagen', 'Premium ab Ruf 15'],
-        ['jens', 'Hafen', 'Fisch direkt vom Kutter'],
-        ['greta', 'Park', 'Wildkräuter & Pilze'],
-        ['ines', 'Weinhandlung', 'Weine & Beratung'],
-        ['kalle', 'Zum Kochlöffel', 'Köche suchen Arbeit'],
-        ['albers', 'Bank', 'Kredite & Tilgung'],
-        ['mira', 'Café Feder', 'Gerüchte & Presse'],
-      ];
-      return `
-      <div class="resto">
-        <section class="resto-stage">
-          <div class="stage-top">
-            <div><span class="eyebrow">${dist ? esc(dist.name) + ' · ' : ''}${KL.season(s).name} · Nachmittag</span><h2>Der Kiez: Lauf hin, sprich die Leute an</h2></div>
-            <button type="button" class="btn small" data-act="gohome">Zurück ins Restaurant</button>
-          </div>
-          <div class="world-wrap kiez"><canvas id="city-canvas" aria-label="Isometrische Karte des Kiezes"></canvas></div>
-          <p class="fine roam-help">Klick auf eine Person oder Tür. Dein Restaurant ist das Haus mit dem roten Schild oben links.</p>
-        </section>
-        <aside class="resto-side">
-          <section class="panel">
-            <h2>Wer ist wo?</h2>
-            <ul class="places">${places.map(([id, place, what]) => `<li><button type="button" class="linkish" data-act="walkto" data-id="${id}"><b>${esc(KL.NPCS[id].name)}</b> · ${place}</button><small>${what}</small></li>`).join('')}</ul>
-          </section>
-          <section class="panel">
-            <h2>Offene Aufträge</h2>
-            <ul class="places">${KL.QUESTS.filter((q) => q.giver && s.flags[q.id] && !s.quests.includes(q.id)).map((q) => `<li><b>${esc(q.name)}</b><small>${esc(q.giver)}: ${esc(q.desc)}</small></li>`).join('') || '<li class="muted">Noch keine. Frag die Leute, ob sie was für dich haben.</li>'}</ul>
-          </section>
-        </aside>
-      </div>`;
-    },
-
+    /* ---------------- Welt (persistente Bühne) ---------------- */
     mountWorld() {
-      if (this.world) { this.world.destroy(); this.world = null; }
+      const stage = document.getElementById('stage');
+      if (!stage) return;
       const s = this.s;
+      const sig = [this.scene, s.team.map((m) => m.id).join(), s.location, s.interior.join()].join('|');
+      if (this.world && this.worldSig === sig && stage.contains(this.world.c)) return this.syncWorld();
+      this.unmountWorld();
+      this.worldSig = sig;
       this.teamSig = s.team.map((m) => m.id).join();
-      const city = document.getElementById('city-canvas');
-      if (city) return this.mountCity(city);
-      const cv = document.getElementById('world-canvas');
-      if (!cv) return;
-      const w = new KL.World(cv, s, { mode: this.build.on ? 'build' : 'idle', tod: 0.32, maxH: Math.max(300, window.innerHeight * 0.66) });
-      this.world = w;
-      if (!this.build.on) return this.attachRoam(w);
-      if (this.build.type) w.ghost = { type: this.build.type, ignore: this.build.moving };
-      w.selected = this.build.sel;
-      w.onTile = (t) => {
-        const b = this.build;
-        if (b.type) {
-          const err = KL.canPlace(s, b.type, t.x, t.y, b.moving);
-          if (err) return this.toast(err, 'bad');
-          if (b.moving) {
-            b.moving.x = t.x; b.moving.y = t.y;
-            b.moving = null; b.type = null;
-            this.toast('Verschoben.', 'good');
-          } else {
-            const fz = KL.FURN[b.type];
-            if (s.money < fz.cost) return this.toast('Dafür reicht das Konto nicht.', 'bad');
-            s.money -= fz.cost;
-            s.layout.push({ id: KL.util.uid(), type: b.type, x: t.x, y: t.y });
-            if (fz.eq) { s.equipment.push(fz.eq); b.type = null; }
-            if (fz.buzz) s.buzz += fz.buzz;
-            this.toast(`${fz.name} aufgestellt (−${eur(fz.cost)}).`, 'good');
-          }
-          this.save();
-          return this.render();
+      stage.innerHTML = '<canvas class="world2d" aria-label="Spielwelt"></canvas>';
+      const cv = stage.querySelector('canvas');
+      this.camState = this.camState || {};
+      const opts = { mode: 'idle', maxH: Math.max(320, stage.clientHeight), cam: this.camState[this.scene] };
+      if (this.scene === 'kiez') this.mountCity(cv, opts);
+      else { this.world = new KL.World(cv, s, { ...opts, tod: 0.32 }); this.attachRoam(this.world); }
+      const roamClick = this.world.onTile;
+      this.world.onTile = (t) => (this.build.on && this.scene === 'restaurant' ? this.buildClick(t) : roamClick && roamClick(t));
+      this.syncWorld();
+    },
+
+    unmountWorld() {
+      if (!this.world) return;
+      if (this.world.view3d) { this.camState = this.camState || {}; this.camState[this.worldSig.split('|')[0]] = this.world.view3d.getCam(); }
+      this.world.destroy();
+      this.world = null;
+    },
+
+    syncWorld() {
+      const w = this.world;
+      if (!w) return;
+      const b = this.build;
+      w.mode = b.on && this.scene === 'restaurant' ? 'build' : 'idle';
+      w.ghost = b.on && b.type ? { type: b.type, ignore: b.moving } : null;
+      w.selected = b.sel;
+    },
+
+    buildClick(t) {
+      const s = this.s, b = this.build;
+      if (b.type) {
+        const err = KL.canPlace(s, b.type, t.x, t.y, b.moving);
+        if (err) return this.toast(err, 'bad');
+        if (b.moving) {
+          b.moving.x = t.x; b.moving.y = t.y;
+          b.moving = null; b.type = null;
+          this.toast('Verschoben.', 'good');
+        } else {
+          const fz = KL.FURN[b.type];
+          if (s.money < fz.cost) return this.toast('Dafür reicht das Konto nicht.', 'bad');
+          s.money -= fz.cost;
+          s.layout.push({ id: KL.util.uid(), type: b.type, x: t.x, y: t.y });
+          if (fz.eq) { s.equipment.push(fz.eq); b.type = null; }
+          if (fz.buzz) s.buzz += fz.buzz;
+          this.toast(`${fz.name} aufgestellt (−${eur(fz.cost)}).`, 'good');
         }
-        const m = KL.occupancy(s);
-        const it = m[t.y] && m[t.y][t.x];
-        b.sel = it || null;
-        this.render();
-      };
+        this.save();
+        return this.render();
+      }
+      const m = KL.occupancy(s);
+      b.sel = (m[t.y] && m[t.y][t.x]) || null;
+      this.render();
     },
 
     attachRoam(w) {
@@ -704,9 +721,9 @@
       });
     },
 
-    mountCity(cv) {
+    mountCity(cv, opts) {
       const s = this.s;
-      const w = new KL.City(cv, s, { mode: 'idle', tod: 0.22, maxH: Math.max(320, window.innerHeight * 0.66) });
+      const w = new KL.City(cv, s, { ...opts, tod: 0.22 });
       this.world = w;
       const pos = this.playerPos.kiez;
       if (pos) { w.player.x = pos.x; w.player.y = pos.y; }
@@ -719,9 +736,10 @@
       KL.Roam.attach(w, { player: w.player, zone: null, targets: this.cityTargets, overlay: () => { this.playerPos.kiez = { x: w.player.x, y: w.player.y }; } });
     },
 
-    goKiez() { this.scene = 'kiez'; this.playerPos.kiez = null; this.render(); window.scrollTo({ top: 0 }); },
+    goKiez() { this.scene = 'kiez'; this.tab = 'restaurant'; this.build.on = false; this.playerPos.kiez = null; this.render(); },
     goHome() {
       this.scene = 'restaurant';
+      this.tab = 'restaurant';
       const d = KL.doorTile(this.s);
       this.playerPos.restaurant = { x: d.x + 0.5, y: d.y - 0.5 };
       this.render();
@@ -851,6 +869,7 @@
     bind(root) {
       const s = this.s;
       root.querySelectorAll('[data-tab-go]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tabGo)));
+      root.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => this.setTab(b.dataset.tab)));
       root.querySelectorAll('[data-lab]').forEach((b) => (b.onclick = () => { this.lab[b.dataset.lab] = b.dataset.id; this.render(); }));
       root.querySelectorAll('[data-set]').forEach((inp) => {
         inp.oninput = () => {
@@ -889,6 +908,8 @@
           break;
         }
         case 'gohome': return this.goHome();
+        case 'gokiez': return this.goKiez();
+        case 'closepanel': this.tab = 'restaurant'; break;
         case 'walkto': {
           const t = this.cityTargets && this.cityTargets().find((x) => x.npc === ds.id);
           if (t && this.world && this.world.onTile) this.world.onTile({ x: Math.floor(t.px), y: Math.floor(t.py) });
@@ -1005,7 +1026,7 @@
       const s = this.s;
       if (KL.menuDishes(s).length < 1) return this.toast('Ohne Menü kein Service. Ab in die Testküche!', 'bad');
       if (KL.layoutStats(s).seats < 2) return this.toast('Ohne Tische keine Gäste. Bau erst Tische im Restaurant.', 'bad');
-      if (this.world) { this.world.destroy(); this.world = null; }
+      this.unmountWorld();
       KL.Evening.start(s, { auto: !!auto }, (result) => this.finishWeek(result));
     },
 

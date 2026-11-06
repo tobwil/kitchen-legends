@@ -225,6 +225,7 @@
       this.s = state;
       this.mode = opts.mode || 'idle'; // idle | build | evening
       this.maxH = opts.maxH || Infinity;
+      this.opts = opts;
       this.tod = opts.tod ?? (opts.night ? 0.9 : 0.32);
       this.shadeCache = new Map();
       const gc = document.createElement('canvas');
@@ -247,6 +248,9 @@
       this.platesOnTables = new Map();
       this.resize();
       this.spawnStaff();
+      if (opts.use3d !== false && KL.has3D && KL.View3D) {
+        try { this.view3d = new KL.View3D(this); if (opts.cam) this.view3d.setCam(opts.cam); } catch (e) { this.view3d = null; }
+      }
       this._loop = this.loop.bind(this);
       this.running = true;
       requestAnimationFrame(this._loop);
@@ -260,6 +264,7 @@
 
     destroy() {
       this.running = false;
+      if (this.view3d) { this.view3d.dispose(); this.view3d = null; }
       this.c.removeEventListener('pointermove', this._move);
       this.c.removeEventListener('click', this._click);
       this._ro.disconnect();
@@ -282,6 +287,7 @@
       this.c.width = Math.round(cw * dpr);
       this.c.height = Math.round(h * dpr);
       this.c.style.height = this.cssH + 'px';
+      if (this.view3d) this.view3d.resize();
       const isoW = (g.w + g.h) * TW / 2;
       this.ox = (cw - isoW) / 2 + g.h * TW / 2;
       this.oy = this.wallH + this.TH * 0.6;
@@ -453,6 +459,7 @@
     }
 
     draw() {
+      if (this.view3d) { if (this.overlay) this.overlay(null); this.view3d.frame(); return; }
       const c = this.ctx, s = this.s, g = this.g;
       c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       c.clearRect(0, 0, this.cssW, this.cssH);

@@ -496,3 +496,11 @@ KL.DISTRICTS = [
     ] },
 ];
 KL.siteById = (id) => { for (const d of KL.DISTRICTS) { const s = d.sites.find((x) => x.id === id); if (s) return { site: s, district: d }; } return null; };
+
+/* ---------- Einrichtungsstile (Komplett-Umbau) ---------- */
+KL.THEMES = [
+  { id: 'schlicht', name: 'Schlicht', cost: 0, amb: 0, upkeep: 0, desc: 'Weiße Wände, ehrlicher Holzboden. So hast du angefangen.' },
+  { id: 'salon', name: 'Berliner Salon', cost: 24000, amb: 12, upkeep: 60, buzz: 10, desc: 'Dunkelgrüne Mustertapete, Stuck, Samtbänke in Bordeaux, Kronleuchter, Goldrahmen und schräge Kunst. Opulent, ein bisschen verrucht, sehr Altbau.' },
+  { id: 'nordisch', name: 'Nordische Klarheit', cost: 16000, amb: 9, upkeep: 30, buzz: 4, desc: 'Helle Eiche, Leinen, Keramik, viel Licht. Ruhe, die man schmeckt.' },
+  { id: 'industrie', name: 'Industrie-Loft', cost: 11000, amb: 6, upkeep: 20, buzz: 6, desc: 'Sichtziegel, Beton, Glühbirnen an Kabeln. Laut, lässig, urban.' },
+];

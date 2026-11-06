@@ -422,7 +422,7 @@
     const revenue = menuRevenue + pairingRevenue + extras;
 
     const wages = s.team.reduce((n, m) => n + m.wage, 0);
-    const upkeep = s.equipment.reduce((n, id) => n + KL.byId(KL.EQUIPMENT, id).upkeep, 0) + s.interior.reduce((n, id) => n + KL.byId(KL.INTERIOR, id).upkeep, 0);
+    const upkeep = s.equipment.reduce((n, id) => n + KL.byId(KL.EQUIPMENT, id).upkeep, 0) + s.interior.reduce((n, id) => n + KL.byId(KL.INTERIOR, id).upkeep, 0) + ((s.theme && KL.byId(KL.THEMES, s.theme)) || { upkeep: 0 }).upkeep;
     const misc = 950 + covers * 4.5; // Energie, Reinigung, Wäsche, Versicherung, Steuerbüro
     const interest = Math.round(s.debt * 0.006);
     const costs = { ingredients: ingredientCost, wages, rent: loc.rent, upkeep, misc: misc + nonAlcCost, interest };

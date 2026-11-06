@@ -122,15 +122,19 @@
     const steel = '#b9c0c6';
     switch (it.type) {
       case 't2': case 't4': case 't6': {
-        const top = style.linen ? '#f4efe6' : '#a87a4f';
+        const th = style.theme;
+        const seatC = th === 'salon' ? '#7a1a2c' : th === 'nordisch' ? '#d9c39a' : th === 'industrie' ? '#3a3a3a' : '#4a3326';
+        const backC = th === 'salon' ? '#5a1020' : th === 'nordisch' ? '#c9b48a' : th === 'industrie' ? '#2a2a2a' : '#3b2a20';
+        const top = style.linen || th === 'salon' ? '#f4efe6' : th === 'nordisch' ? '#e2c9a0' : th === 'industrie' ? '#5a4030' : '#a87a4f';
+        if (th === 'industrie') { cyl(g, x + w / 2, z + 0.5, 0.008, 1.4, 0.95, '#1d1d1d', { cast: false }); const bulb = ball(g, x + w / 2, 1.36, z + 0.5, 0.06, '#ffd08a', { emissive: 0xffa040, ei: 1, cast: false, detail: 1 }); g.userData.bulb = bulb; }
         box(g, x + 0.1, z + 0.22, w - 0.2, d - 0.44, 0.42, 0.05, top);
         if (style.linen) box(g, x + 0.1, z + 0.22, w - 0.2, d - 0.44, 0.3, 0.12, '#ebe4d6', { edges: false });
         for (let i = 0; i < w; i++) {
           box(g, x + i + 0.47, z + 0.47, 0.06, 0.06, 0, 0.42, '#2a1d16', { edges: false });
           for (const side of [0, 1]) {
             const cz = side ? z + 0.82 : z + 0.04;
-            box(g, x + i + 0.33, cz, 0.34, 0.14, 0.24, 0.05, '#4a3326');
-            box(g, x + i + 0.33, side ? cz + 0.11 : cz, 0.34, 0.03, 0.29, 0.32, '#3b2a20');
+            box(g, x + i + 0.33, cz, 0.34, 0.14, 0.24, 0.05, seatC);
+            box(g, x + i + 0.33, side ? cz + 0.11 : cz, 0.34, 0.03, 0.29, 0.32, backC);
             for (const lx of [0.35, 0.63]) box(g, x + i + lx, cz + 0.05, 0.03, 0.03, 0, 0.24, '#2a1d16', { edges: false });
           }
         }
@@ -315,6 +319,8 @@
       this.dyn = new T.Group(); scene.add(this.dyn);
       this.people = new Map();
       this.lights = [];
+      this.themeLights = [];
+      this.themeShades = [];
       if (this.city) this.buildCity(); else this.buildRoom();
 
       // Partikel
@@ -398,6 +404,7 @@
       const s = this.w.s, g = KL.GRID[s.location];
       const W = this.W, H = this.H, K = KL.KITCHEN_ROWS;
       const grp = this.static;
+      const th = s.theme || 'schlicht';
       // Boden als gemalte Textur
       const px = 96;
       const floor = canvasTex(W * px, H * px, (c) => {
@@ -406,9 +413,19 @@
             c.fillStyle = (x + y) % 2 ? '#8e979e' : '#a7afb5';
             c.fillRect(x * px, y * px, px, px);
             c.strokeStyle = 'rgba(40,40,40,0.25)'; c.lineWidth = 2; c.strokeRect(x * px, y * px, px, px);
+          } else if (th === 'salon') {
+            // Fischgrät-Parkett, dunkel
+            for (let k = 0; k < 8; k++) for (let j = 0; j < 2; j++) {
+              c.save(); c.translate(x * px + j * px / 2 + px / 4, y * px + k * px / 8); c.rotate(j ? 0.6 : -0.6);
+              c.fillStyle = (k + j + x) % 2 ? '#4a2c1c' : '#5a3622'; c.fillRect(-px / 4, -px / 32, px / 2, px / 14);
+              c.strokeStyle = 'rgba(0,0,0,0.35)'; c.strokeRect(-px / 4, -px / 32, px / 2, px / 14); c.restore();
+            }
+          } else if (th === 'industrie') {
+            c.fillStyle = (x * 7 + y * 3) % 5 === 0 ? '#8d8a85' : '#97948e'; c.fillRect(x * px, y * px, px, px);
+            c.strokeStyle = 'rgba(40,40,40,0.25)'; c.lineWidth = 2; if ((x + y) % 2 === 0) c.strokeRect(x * px, y * px, px * 2, px * 2);
           } else {
             for (let k = 0; k < 4; k++) {
-              c.fillStyle = (x + k + y) % 3 === 0 ? g.floorA : (x + k) % 2 ? g.floorB : '#7a5a3d';
+              c.fillStyle = th === 'nordisch' ? ((x + k + y) % 3 === 0 ? '#e4cfa8' : '#d9c29a') : (x + k + y) % 3 === 0 ? g.floorA : (x + k) % 2 ? g.floorB : '#7a5a3d';
               c.fillRect(x * px, y * px + k * (px / 4), px, px / 4);
               c.strokeStyle = 'rgba(30,18,10,0.35)'; c.lineWidth = 2;
               c.strokeRect(x * px + ((k * 37 + y * 11) % px) - px, y * px + k * (px / 4), px * 1.6, px / 4);
@@ -434,7 +451,7 @@
       this.windows = [];
       for (let y = 0; y < H; y++) {
         const kitchen = y < K;
-        const col = kitchen ? '#7d868d' : g.wall;
+        const col = kitchen ? '#7d868d' : th === 'salon' ? '#1f3a2e' : th === 'nordisch' ? '#efeae0' : th === 'industrie' ? '#9a4a34' : g.wall;
         const win = !kitchen && y % 2 === 1 && y < H - 1;
         if (!win) { box(grp, -TH, y, TH, 1, 0, WH, col); continue; }
         box(grp, -TH, y, TH, 1, 0, 0.7, col);
@@ -466,15 +483,69 @@
           box(grp, x, K - 0.1, 1, 0.1, 0, 0.95, '#7d868d');
         }
       } else box(grp, 0, K - 0.04, W, 0.04, 0, 0.05, '#c9a45c', { metal: 0.5 });
+      this.themeDecor(grp, th, K);
       // Kunst an der Wand
       if (s.interior.includes('kunst')) {
         [K + 1, K + 3, K + 5].filter((y) => y % 2 === 0 && y < H - 1).forEach((y, i) => box(grp, -0.02, y + 0.2, 0.04, 0.6, 1.0, 0.7, ['#b2442e', '#2f5d7a', '#d4b06a'][i % 3]));
       }
     }
 
+    themeDecor(grp, th, K) {
+      const W = this.W, H = this.H;
+      const wallRows = [];
+      for (let y = K; y < H; y++) wallRows.push(y);
+      if (th === 'salon') {
+        // Mustertapete auf der Innenseite der Wand
+        const paper = canvasTex(128, 256, (c, w, h) => {
+          c.fillStyle = '#1f3a2e'; c.fillRect(0, 0, w, h);
+          c.strokeStyle = 'rgba(212,176,106,0.55)'; c.lineWidth = 2;
+          for (let yy = 0; yy < h; yy += 64) for (let xx = 0; xx < w; xx += 64) {
+            c.beginPath(); c.ellipse(xx + 32, yy + 32, 14, 24, 0, 0, Math.PI * 2); c.stroke();
+            c.beginPath(); c.moveTo(xx + 32, yy + 4); c.lineTo(xx + 32, yy + 60); c.stroke();
+            c.beginPath(); c.arc(xx + 32, yy + 32, 5, 0, Math.PI * 2); c.stroke();
+          }
+        });
+        paper.wrapS = paper.wrapT = T.RepeatWrapping; paper.repeat.set(1, 1.2);
+        const pm = new T.MeshStandardMaterial({ map: paper, roughness: 0.9 });
+        wallRows.forEach((y) => {
+          const win = y % 2 === 1 && y < H - 1;
+          const add = (z0, z1, y0, y1) => { const m = new T.Mesh(new T.PlaneGeometry(z1 - z0, y1 - y0), pm); m.rotation.y = Math.PI / 2; m.position.set(0.004, (y0 + y1) / 2, y + (z0 + z1) / 2); m.receiveShadow = true; grp.add(m); };
+          if (!win) add(0, 1, 0.8, 2.3); else { add(0, 1, 1.85, 2.3); add(0, 0.18, 0.8, 1.85); add(0.82, 1, 0.8, 1.85); }
+        });
+        // Holzvertäfelung, Stuckleiste, Goldrahmen
+        box(grp, 0, K, 0.05, H - K, 0, 0.8, '#3b2418');
+        box(grp, 0, K, 0.08, H - K, 2.2, 0.1, '#e8dcc4');
+        box(grp, 0, K, 0.1, H - K, 0.78, 0.04, '#c9a45c', { metal: 0.6, rough: 0.35 });
+        wallRows.filter((y) => y % 2 === 0 && y > K && y < H - 1).forEach((y, i) => {
+          const art = canvasTex(64, 80, (c, w, h) => { c.fillStyle = ['#b2442e', '#2f5d7a', '#d4b06a', '#6b2030'][i % 4]; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(w * 0.5, h * 0.45, w * 0.25, 0, 7); c.fill(); c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(0, h * 0.7, w, h * 0.3); });
+          box(grp, 0.01, y + 0.15, 0.05, 0.7, 1.05, 0.9, '#c9a45c', { metal: 0.7, rough: 0.3 });
+          const pic = new T.Mesh(new T.PlaneGeometry(0.56, 0.74), new T.MeshStandardMaterial({ map: art })); pic.rotation.y = Math.PI / 2; pic.position.set(0.07, 1.5, y + 0.5); grp.add(pic);
+        });
+        // Kronleuchter
+        const dz = K + (H - K) / 2;
+        [0.3, 0.68].forEach((fx) => {
+          const cx = W * fx;
+          cyl(grp, cx, dz, 0.01, 1.85, 0.5, '#c9a45c', { cast: false });
+          const ring = new T.Mesh(new T.TorusGeometry(0.32, 0.025, 6, 20), mat('#c9a45c', { metal: 0.7, rough: 0.3 }));
+          ring.rotation.x = Math.PI / 2; ring.position.set(cx, 1.85, dz); grp.add(ring);
+          for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; this.themeShades.push(ball(grp, cx + Math.cos(a) * 0.32, 1.9, dz + Math.sin(a) * 0.32, 0.04, '#fff2d0', { emissive: 0xffd08a, ei: 0, cast: false, detail: 0 })); }
+          const l = new T.PointLight(0xffd08a, 0, 6, 2); l.position.set(cx, 1.7, dz); this.scene.add(l); this.themeLights.push(l);
+        });
+      } else if (th === 'industrie') {
+        const brick = canvasTex(128, 128, (c, w, h) => { c.fillStyle = '#8a3e2c'; c.fillRect(0, 0, w, h); for (let yy = 0; yy < h; yy += 16) for (let xx = -16; xx < w; xx += 32) { c.fillStyle = ['#9a4a34', '#a85a40', '#8c4232'][(xx + yy) % 3 === 0 ? 0 : (yy / 16) % 2 ? 1 : 2]; c.fillRect(xx + ((yy / 16) % 2) * 16 + 1, yy + 1, 30, 14); } });
+        brick.wrapS = brick.wrapT = T.RepeatWrapping; brick.repeat.set(2, 3);
+        const bm = new T.MeshStandardMaterial({ map: brick, roughness: 0.95 });
+        wallRows.forEach((y) => { const win = y % 2 === 1 && y < H - 1; const add = (z0, z1, y0, y1) => { const m = new T.Mesh(new T.PlaneGeometry(z1 - z0, y1 - y0), bm); m.rotation.y = Math.PI / 2; m.position.set(0.004, (y0 + y1) / 2, y + (z0 + z1) / 2); grp.add(m); }; if (!win) add(0, 1, 0, 2.3); else { add(0, 1, 0, 0.7); add(0, 1, 1.85, 2.3); add(0, 0.18, 0.7, 1.85); add(0.82, 1, 0.7, 1.85); } });
+        box(grp, 0, K, W, 0.08, 2.2, 0.08, '#2a2a2a');
+      } else if (th === 'nordisch') {
+        box(grp, 0, K, 0.04, H - K, 0, 0.12, '#d9c29a');
+        wallRows.filter((y) => y % 2 === 0 && y > K && y < H - 1).forEach((y) => { box(grp, 0.02, y + 0.2, 0.25, 0.6, 1.0, 0.04, '#d9c29a'); cyl(grp, 0.15, y + 0.4, 0.06, 1.04, 0.14, '#efeae0'); cyl(grp, 0.15, y + 0.65, 0.05, 1.04, 0.1, '#8a9a8a'); });
+      }
+    }
+
     syncFurniture() {
       const s = this.w.s;
-      const style = { linen: s.interior.includes('tische'), light: s.interior.includes('licht') };
+      const style = { linen: s.interior.includes('tische'), light: s.interior.includes('licht'), theme: s.theme || 'schlicht' };
       const sig = s.layout.map((i) => i.type + i.x + ',' + i.y).join('|') + JSON.stringify(style);
       if (sig === this.furnSig) return;
       this.furnSig = sig;
@@ -488,6 +559,7 @@
         this.furn.add(m);
         const f = KL.FURN[it.type];
         if (m.userData.flame) this.flames.push(m.userData.flame);
+        if (m.userData.bulb) this.shades.push(m.userData.bulb);
         if (m.userData.lamps) this.passLamps.push(...m.userData.lamps);
         if (m.userData.shade) this.shades.push(m.userData.shade);
         if (m.userData.fire) this.fireSpots.push([it.x + 0.5, it.y + 0.9]);
@@ -630,6 +702,8 @@
         this.syncFurniture();
         const lv = Math.max(lamps, styleLight ? 0.45 : 0);
         this.lights.forEach((l) => (l.intensity = l === this.passLight ? 1.2 + lv * 1.5 : lv * 2.2));
+        this.themeLights.forEach((l) => (l.intensity = 0.4 + lv * 2.4));
+        this.themeShades.forEach((m) => (m.material.emissiveIntensity = 0.5 + lv * 2));
         this.warm.intensity = lv * 1.3;
         this.flames.forEach((f, i) => { f.scale.setScalar(0.8 + Math.sin(w.t * 12 + i) * 0.15); f.material.emissiveIntensity = 0.6 + lv * 2.4; });
         this.shades.forEach((m) => (m.material.emissiveIntensity = lv * 1.4));

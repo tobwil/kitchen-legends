@@ -603,7 +603,14 @@
         <div class="row between"><span class="muted">${x.amb ? `Ambiente +${x.amb} · ` : ''}Unterhalt ${eur(x.upkeep)}/Wo.</span>
         ${owned ? '<span class="pill">Vorhanden</span>' : `<button type="button" class="btn small" data-act="buy" data-kind="${kind}" data-id="${x.id}" ${s.money < x.cost ? 'disabled' : ''}>${eur(x.cost)}</button>`}</div>
       </article>`;
+      const cur = s.theme || 'schlicht';
       return `
+      <section class="panel">
+        <div class="row between wrap"><h2>Einrichtungsstil</h2><span class="muted">Kompletter Umbau des Gastraums</span></div>
+        <div class="upgrade-grid">${KL.THEMES.map((t) => `<article class="upgrade theme ${cur === t.id ? 'owned' : ''}"><h3>${esc(t.name)}</h3><p>${esc(t.desc)}</p>
+          <div class="row between"><span class="muted">${t.amb ? `Ambiente +${t.amb} · ` : ''}${t.upkeep ? `Unterhalt ${eur(t.upkeep)}/Wo.` : 'kein Unterhalt'}</span>
+          ${cur === t.id ? '<span class="pill">Aktuell</span>' : `<button type="button" class="btn small" data-act="theme" data-id="${t.id}" ${s.money < t.cost ? 'disabled' : ''}>${t.cost ? eur(t.cost) : 'Zurückbauen'}</button>`}</div></article>`).join('')}</div>
+      </section>
       <section class="panel">
         <div class="row between wrap"><h2>Gastraum</h2><span class="muted">Ambiente <b>${f.amb}</b>/100 · ${f.seats} Plätze</span></div>
         <p class="muted">Ambiente hebt die Preisbereitschaft und die Zufriedenheit. Für Sterne zählt es nicht.</p>
@@ -630,7 +637,7 @@
       const stage = document.getElementById('stage');
       if (!stage) return;
       const s = this.s;
-      const sig = [this.scene, s.team.map((m) => m.id).join(), s.location, s.interior.join()].join('|');
+      const sig = [this.scene, s.team.map((m) => m.id).join(), s.location, s.interior.join(), s.theme].join('|');
       if (this.world && this.worldSig === sig && stage.contains(this.world.c)) return this.syncWorld();
       this.unmountWorld();
       this.worldSig = sig;
@@ -905,6 +912,13 @@
           const key = `${d.product}+${d.accent}`;
           if (e.bold && !s.discovered.includes(key)) { s.discovered.push(key); s.buzz += 3; KL.gainXP(s, 40); this.toast(`Neue Kombination entdeckt: ${e.bold}! +Buzz +40 XP`, 'good'); }
           else this.toast('Ab ins Rezeptbuch. +15 XP', 'good');
+          break;
+        }
+        case 'theme': {
+          const t = KL.byId(KL.THEMES, ds.id);
+          if (s.money < t.cost) return this.toast('Dafür reicht das Konto nicht.', 'bad');
+          s.money -= t.cost; s.theme = t.id; s.buzz += t.buzz || 0;
+          this.toast(`Umbau fertig: ${t.name}.`, 'good');
           break;
         }
         case 'gohome': return this.goHome();

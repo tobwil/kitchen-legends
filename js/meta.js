@@ -152,9 +152,15 @@
       return { ...base, i: 98, daily: day, title: 'Tagesservice', mods: [...new Set([m1, m2])], dishes: [star, star, ...pool], dur: 150, special: star };
     },
 
+    // Der am weitesten freigeschaltete Abend, der noch nicht gespielt wurde – sonst der letzte offene
     nextNight() {
-      for (let ch = 0; ch < G.CHAPTERS.length; ch++) for (let i = 0; i < G.NIGHTS_PER_CH; i++) if (this.unlocked(ch, i) && this.stars(ch, i) < 3) return { ch, i };
-      return { ch: 0, i: 0 };
+      let last = { ch: 0, i: 0 };
+      for (let ch = 0; ch < G.CHAPTERS.length; ch++) for (let i = 0; i < G.NIGHTS_PER_CH; i++) {
+        if (!this.unlocked(ch, i)) continue;
+        last = { ch, i };
+        if (this.stars(ch, i) === 0) return { ch, i };
+      }
+      return last;
     },
 
     /* ---------- Briefing ---------- */
@@ -169,6 +175,7 @@
           <h2>${nt.boss ? 'Inspektoren-Abend' : legend ? 'Kein Ende in Sicht' : nt.title}</h2>
           ${nt.boss ? `<p class="boss-text">Heute isst jemand vom Guide Céleste bei dir. Tisch 9, allein, drei Gänge. Schnitt ab <b>${80 + ch * 3}</b> und kein Gang darf zu spät kommen – dann gibt es <b>${G.CHAPTERS[ch].award}</b>.</p>` : ''}
           ${nt.mods.length ? `<div class="mods">${nt.mods.map((m) => `<div class="mod"><b>${G.MODS[m].name}</b><span>${G.MODS[m].text}</span></div>`).join('')}</div>` : ''}
+          ${nt.fresh && nt.fresh.length && !legend && !daily ? `<div class="mod fresh"><b>Neu auf der Karte</b><span>${nt.fresh.map((d) => esc(d.name)).join(' · ')}</span></div>` : ''}
           <span class="eyebrow">Auf der Karte</span>
           <div class="dishes">${[...new Set(nt.dishes)].map((d) => `<span class="dish-chip">${d.items.map((x) => `<i style="background:${G.ITEMS[x].col}"></i>`).join('')}${esc(d.name)}</span>`).join('')}</div>
           <span class="eyebrow">Linie</span>
@@ -250,6 +257,14 @@
       if (nt.boss && res.inspPassed) s.awards[ch] = true;
       this.persist();
       const shownStars = nt.boss && !res.inspPassed ? 0 : res.stars;
+      // Was kommt als Nächstes?
+      let nextOpen = null, nextLabel = 'Zur Karte', unlockHint = '';
+      if (!legend && !daily && !nt.boss) {
+        const ni = i + 1;
+        if (ni < G.NIGHTS_PER_CH && this.unlocked(ch, ni)) { nextOpen = { ch, i: ni }; nextLabel = ni === G.NIGHTS_PER_CH - 1 ? 'Zu den Inspektoren' : `Weiter: ${G.night(ch, ni).title}`; }
+        else if (ni < G.NIGHTS_PER_CH - 1) unlockHint = `Für ${G.night(ch, ni).title} brauchst du mindestens einen Stern.`;
+        else if (ni === G.NIGHTS_PER_CH - 1) unlockHint = `Die Inspektoren kommen ab ${G.BOSS_STARS} Sternen in diesem Kapitel (du hast ${this.chapterStars(ch)}).`;
+      }
       const review = G.REVIEWS[shownStars][Math.floor(Math.random() * G.REVIEWS[shownStars].length)];
       const el = this.screen(`
         <div class="results">
@@ -267,9 +282,10 @@
           </dl>
           <blockquote>${review}</blockquote>
           ${legend ? '' : `<p class="sub">Sterne bei ${res.th.join(' · ')} Punkten</p>`}
+          ${unlockHint ? `<p class="unlock-hint">${unlockHint}</p>` : ''}
           <div class="row">
             <button type="button" class="ghost-btn" id="again">Nochmal</button>
-            <button type="button" class="big-btn" id="next">${awardNow ? 'Das Telefon klingelt …' : 'Weiter'}</button>
+            <button type="button" class="big-btn" id="next">${awardNow ? 'Das Telefon klingelt …' : nextLabel}</button>
           </div>
         </div>`, 'resultscreen');
       // Hochzählen
@@ -280,7 +296,7 @@
       for (let k = 0; k < shownStars; k++) setTimeout(() => G.Audio.star(k), 300 + k * 450);
       if (newBest) setTimeout(() => G.Audio.coin(), 1200);
       el.querySelector('#again').onclick = () => (legend ? this.briefing(3, 99) : daily ? this.briefing(0, 98) : this.briefing(ch, i));
-      el.querySelector('#next').onclick = () => (awardNow ? this.ceremony(ch) : this.map(ch));
+      el.querySelector('#next').onclick = () => (awardNow ? this.ceremony(ch) : nextOpen ? this.briefing(nextOpen.ch, nextOpen.i) : this.map(ch));
     },
 
     /* ---------- Der Anruf ---------- */

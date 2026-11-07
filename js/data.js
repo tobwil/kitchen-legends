@@ -84,7 +84,9 @@ G.night = (ch, i) => {
     dur,
     interval: Math.max(3.9, 8.2 - n * 0.2),
     patience: Math.max(25, 46 - n * 0.85),
-    dishes: G.DISHES.filter((d) => d.ch <= ch),
+    // Jeder Abend bringt ein neues Gericht, bis die Kapitel-Karte voll ist
+    dishes: G.DISHES.filter((d) => d.ch < ch).concat(G.DISHES.filter((d) => d.ch === ch).slice(0, Math.min(99, (ch === 0 ? 2 : 1) + i))),
+    fresh: (() => { const own = G.DISHES.filter((d) => d.ch === ch); const k = (ch === 0 ? 2 : 1) + i; return i === 0 ? own.slice(0, k) : own.slice(k - 1, k); })(),
     stations: G.CHAPTERS[ch].stations,
     title: boss ? 'Inspektoren-Abend' : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][i] + 'abend',
   };

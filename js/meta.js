@@ -184,6 +184,7 @@
           <h2>${nt.boss ? 'Inspektoren-Abend' : legend ? 'Kein Ende in Sicht' : nt.title}</h2>
           ${nt.boss ? `<p class="boss-text">Heute isst jemand vom Guide Céleste bei dir. Tisch 9, allein, drei Gänge. Schnitt ab <b>${80 + ch * 3}</b> und kein Gang darf zu spät kommen – dann gibt es <b>${G.CHAPTERS[ch].award}</b>.</p>` : ''}
           ${nt.mods.length ? `<div class="mods">${nt.mods.map((m) => `<div class="mod"><b>${G.MODS[m].name}</b><span>${G.MODS[m].text}</span></div>`).join('')}</div>` : ''}
+          ${nt.newStation && !legend && !daily ? `<div class="mod fresh"><b>Neue Station: ${G.STATIONS[nt.newStation].name}</b><span>${G.STATIONS[nt.newStation].hint}</span></div>` : ''}
           ${nt.fresh && nt.fresh.length && !legend && !daily ? `<div class="mod fresh"><b>Neu auf der Karte</b><span>${nt.fresh.map((d) => esc(d.name)).join(' · ')}</span></div>` : ''}
           <span class="eyebrow">Auf der Karte</span>
           <div class="dishes">${[...new Set(nt.dishes)].map((d) => `<span class="dish-chip">${d.items.map((x) => `<i style="background:${G.ITEMS[x].col}"></i>`).join('')}${esc(d.name)}</span>`).join('')}</div>

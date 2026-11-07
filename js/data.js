@@ -33,28 +33,40 @@ G.ITEMS = {
   sellerie: { name: 'Sellerie', st: 'ofen', shape: 'roots', col: '#ddd2ae' },
   karotte: { name: 'Karotte', st: 'ofen', shape: 'roots', col: '#e47f2c' },
   schoko: { name: 'Schokolade', st: 'patisserie', shape: 'quenelle', col: '#4a2616' },
+  lamm: { name: 'Lammrücken', st: 'pfanne', shape: 'meat', col: '#b0524a', sear: '#4a1a12' },
+  nussbutter: { name: 'Nussbutter', st: 'topf', shape: 'sauce', col: '#b8822e' },
+  erdbeere: { name: 'Walderdbeere', st: 'kalt', shape: 'slices', col: '#d8324a' },
+  kaviar: { name: 'Kaviar', st: 'kalt', shape: 'mound', col: '#1d1d22' },
   eis: { name: 'Heumilch-Eis', st: 'patisserie', shape: 'quenelle', col: '#f7f0da' },
 };
 
 // Gerichte. ch = ab welchem Kapitel sie auf der Karte stehen
 G.DISHES = [
+  // Kapitel 1: Hinterhof. Am Donnerstag kommt der Ofen
   { id: 'saibling', name: 'Saibling · Gurke', items: ['saibling', 'gurke'], value: 120, ch: 0, sauce: '#7fae5a' },
   { id: 'spargel', name: 'Spargel · Beurre blanc', items: ['spargel', 'beurre'], value: 120, ch: 0, sauce: '#f1dfa0' },
   { id: 'tatar', name: 'Tatar · Kräuter', items: ['tatar', 'kraeuter'], value: 110, ch: 0, sauce: '#4f8c3c' },
   { id: 'muschel', name: 'Jakobsmuschel · Beurre blanc', items: ['muschel', 'beurre'], value: 140, ch: 0, sauce: '#f1dfa0' },
-  { id: 'bete', name: 'Rote Bete · Ziegenkäse', items: ['bete', 'ziege'], value: 130, ch: 1, sauce: '#9a1d42' },
+  { id: 'bete', name: 'Rote Bete · Ziegenkäse', items: ['bete', 'ziege'], value: 130, ch: 0, sauce: '#9a1d42' },
+  // Kapitel 2: der erste Stern
   { id: 'taube', name: 'Taube · Jus · Sellerie', items: ['taube', 'jus', 'sellerie'], value: 210, ch: 1, sauce: '#5a2614' },
   { id: 'karotte', name: 'Karotte · Dashi · Kräuter', items: ['karotte', 'dashi', 'kraeuter'], value: 180, ch: 1, sauce: '#d6a95a' },
+  { id: 'sellerie', name: 'Sellerie · Nussbutter', items: ['sellerie', 'nussbutter'], value: 150, ch: 1, sauce: '#b8822e' },
+  { id: 'lamm', name: 'Lamm · Jus · Gurke', items: ['lamm', 'jus', 'gurke'], value: 220, ch: 1, sauce: '#5a2614' },
+  // Kapitel 3: zwei Sterne, Lina und die Pâtisserie
   { id: 'schoko', name: 'Schokolade · Salzkaramell', items: ['schoko', 'karamell'], value: 170, ch: 2, sauce: '#c3742a' },
   { id: 'apfel', name: 'Heumilch-Eis · Apfel', items: ['eis', 'apfel'], value: 160, ch: 2, sauce: '#dfe27a' },
   { id: 'reh', name: 'Reh · Jus · Rote Bete', items: ['reh', 'jus', 'bete'], value: 230, ch: 2, sauce: '#5a2614' },
+  { id: 'erdbeere', name: 'Heumilch-Eis · Walderdbeere', items: ['eis', 'erdbeere'], value: 170, ch: 2, sauce: '#d8324a' },
+  // Kapitel 4: drei Sterne
   { id: 'bries', name: 'Kalbsbries · Dashi · Gurke', items: ['bries', 'dashi', 'gurke'], value: 220, ch: 3, sauce: '#d6a95a' },
+  { id: 'kaviar', name: 'Kaviar · Beurre blanc', items: ['kaviar', 'beurre'], value: 260, ch: 3, sauce: '#f1dfa0' },
   { id: 'muschel2', name: 'Muschel · Dashi · Apfel', items: ['muschel', 'dashi', 'apfel'], value: 220, ch: 3, sauce: '#d6a95a' },
 ];
 
 G.CHAPTERS = [
   { name: 'Hinterhof', sub: 'Kredit, kaputte Spülmaschine, große Träume', stations: ['pfanne', 'topf', 'kalt'], award: 'Empfehlung im Guide', awardStars: 0.5, color: '#c4553b' },
-  { name: 'Der erste Stern', sub: 'Der Ofen glüht, die Stadt redet', stations: ['pfanne', 'topf', 'kalt', 'ofen'], award: 'Ein Stern', awardStars: 1, color: '#d4a24c' },
+  { name: 'Der erste Stern', sub: 'Größere Karte, die Stadt redet', stations: ['pfanne', 'topf', 'kalt', 'ofen'], award: 'Ein Stern', awardStars: 1, color: '#d4a24c' },
   { name: 'Zwei Sterne', sub: 'Eine Küche, für die man einen Umweg fährt', stations: ['pfanne', 'topf', 'kalt', 'ofen', 'patisserie'], award: 'Zwei Sterne', awardStars: 2, color: '#7aa0c4' },
   { name: 'Drei Sterne', sub: 'Eine eigene Reise wert', stations: ['pfanne', 'topf', 'kalt', 'ofen', 'patisserie'], award: 'Drei Sterne', awardStars: 3, color: '#e8c46a' },
 ];
@@ -79,15 +91,18 @@ G.night = (ch, i) => {
   if (!boss && n >= 2) mods.push(modsPool[(n * 7 + ch) % modsPool.length]);
   if (!boss && n >= 14) mods.push(modsPool[(n * 3 + 2) % modsPool.length]);
   const dur = Math.min(185, 120 + n * 3 + (boss ? 25 : 0));
+  const st = ch === 0 && i >= 3 ? ['pfanne', 'topf', 'kalt', 'ofen'] : G.CHAPTERS[ch].stations;
+  const cookable = (d) => d.items.every((x) => st.includes(G.ITEMS[x].st));
   return {
     ch, i, n, boss, mods: [...new Set(mods)],
     dur,
-    interval: Math.max(3.9, 8.2 - n * 0.2),
+    interval: Math.max(4.4, 8.2 - n * 0.18),
     patience: Math.max(25, 46 - n * 0.85),
     // Jeder Abend bringt ein neues Gericht, bis die Kapitel-Karte voll ist
-    dishes: G.DISHES.filter((d) => d.ch < ch).concat(G.DISHES.filter((d) => d.ch === ch).slice(0, Math.min(99, (ch === 0 ? 2 : 1) + i))),
+    dishes: G.DISHES.filter((d) => d.ch < ch).concat(G.DISHES.filter((d) => d.ch === ch).slice(0, Math.min(99, (ch === 0 ? 2 : 1) + i))).filter(cookable),
     fresh: (() => { const own = G.DISHES.filter((d) => d.ch === ch); const k = (ch === 0 ? 2 : 1) + i; return i === 0 ? own.slice(0, k) : own.slice(k - 1, k); })(),
-    stations: G.CHAPTERS[ch].stations,
+    stations: st,
+    newStation: ch === 0 && i === 3 ? 'ofen' : ch === 2 && i === 0 ? 'patisserie' : null,
     title: boss ? 'Inspektoren-Abend' : ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][i] + 'abend',
   };
 };

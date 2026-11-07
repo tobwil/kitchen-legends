@@ -14,6 +14,17 @@ Kein Verwaltungsspiel, sondern das Gefühl, am Pass zu stehen, wenn der Service 
 
 Alles läuft weiter, während du anrichtest. Das ist der Druck.
 
+## Dramaturgie eines Abends
+
+- **Start** (bis ca. 19:15): Türen auf, Bons kommen langsam, Mo: „Ruhig anfangen.“
+- **Die Bude füllt sich**: normales Tempo
+- **Hauptzeit** (ca. 20 Uhr): Glocke, „Hauptzeit!“, deutlich mehr Bons
+- **Endspurt**: etwas Luft, dann „Letzte Bestellungen!“
+
+## Neue Inhalte pro Abend
+
+Jeder Abend bringt ein neues Gericht auf die Karte (16 Gerichte insgesamt). Der Ofen kommt am Donnerstag im ersten Kapitel, die Pâtisserie mit Lina in Kapitel 3.
+
 ## Druck-Systeme
 
 - Geduld pro Tisch (Balken auf dem Bon, wackelt kurz vor Schluss)

@@ -326,6 +326,14 @@
       this.chat = { who, text: text.replace('{t}', vars.t ?? ''), at: this.rt };
     }
 
+    // Ein Abend hat eine Dramaturgie: ruhiger Start, Hauptzeit, Endspurt
+    phase() {
+      if (this.night.legend) return 'rush';
+      const k = this.t / this.night.dur;
+      return k < 0.22 ? 'start' : k < 0.42 ? 'build' : k < 0.72 ? 'rush' : 'finale';
+    }
+    phaseMul() { return { start: 1.55, build: 1.0, rush: 0.74, finale: 0.92 }[this.phase()]; }
+
     /* ---------- Stress ---------- */
     addStress(v) {
       const k = v > 0 ? 1 - 0.2 * this.up('ruhe') : 1;
@@ -504,6 +512,16 @@
       const t = this.t;
       // Ereignisse
       this.events.forEach((ev) => { if (!ev.done && t >= ev.at) { ev.done = true; ev.fn(); } });
+      // Phasenwechsel ankündigen
+      const ph = this.phase();
+      if (!frozen && ph !== this.lastPhase) {
+        if (this.lastPhase) {
+          if (ph === 'build') this.callout('Die Bude füllt sich', C.ink, 1.4);
+          if (ph === 'rush') { this.callout('Hauptzeit!', C.heat, 1.8); this.say('peak'); G.Audio.bell(); }
+          if (ph === 'finale') { this.callout('Endspurt', C.gold, 1.4); this.say('finale'); }
+        } else if (!this.tut) this.say('open');
+        this.lastPhase = ph;
+      }
       // Neue Bons
       if (!frozen && !this.lastCall && t >= nt.dur - 14 && !nt.legend) { this.lastCall = true; this.callout('Letzte Bestellungen!', C.gold, 1.6); this.say('last'); }
       if (!frozen && t < nt.dur - 14) {
@@ -511,7 +529,7 @@
         const maxOpen = this.slots.length + 4;
         if (this.spawnT <= 0) {
           if (this.tickets.length < maxOpen) this.spawn();
-          this.spawnT = nt.interval * rnd(0.75, 1.25) * (this.tickets.length >= this.slots.length + 1 ? 1.25 : 1);
+          this.spawnT = nt.interval * this.phaseMul() * rnd(0.8, 1.2) * (this.tickets.length >= this.slots.length + 1 ? 1.25 : 1);
         }
       }
       this.assignSlots();

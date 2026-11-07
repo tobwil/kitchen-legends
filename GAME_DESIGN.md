@@ -31,6 +31,17 @@ Alles läuft weiter, während du anrichtest. Das ist der Druck.
 - **Tagesservice**: jeden Tag ein Spezial-Gericht mit zwei Sonderregeln und Tagesbonus
 - **Legenden-Service**: endlos, nach drei Sternen
 
+## Menschen & Geschichte
+
+- **Mo** (Souschef) – trocken, loyal, ruft während des Service dazwischen
+- **Lina** (Patissière, ab Kapitel 3) – Paris-geschult, streng mit Schokolade
+- **Herr Brandt** – Stammgast aus dem dritten Stock, will alles perfekt
+- **Mira Haddad** – Food-Journalistin, ihre Teller landen im Netz
+- **Frau Albers** – die Bank, und die erste Rate
+- **Die Inspektorin** – Hut, Leitungswasser, Notizbuch. Tisch 9.
+
+Vor jedem der 24 Abende gibt es eine kurze Szene. Im Service zeigt ein Gastraum-Streifen die Gäste: Sie werden ungeduldig, gehen mit Herz oder mit Kreuz. Draußen wird es im Lauf des Abends Nacht. Nach dem Service kommentiert Mo den Abend.
+
 ## Ausblick
 
 - Rezeptbuch mit Meisterschaft pro Gericht (Sammeln)

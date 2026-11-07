@@ -68,6 +68,7 @@
     swoosh() { this.burst(0.35, 1400, 0.2, 'bandpass'); },
     bell() { [1760, 2640, 3520].forEach((f, i) => this.tone(f, 1.1 - i * 0.3, 'sine', 0.16 / (i + 1))); },
     whoosh() { this.burst(0.3, 700, 0.3, 'lowpass'); },
+    clink() { const f = 1800 + Math.random() * 1600; this.tone(f, 0.08, 'triangle', 0.025); this.tone(f * 1.5, 0.12, 'sine', 0.015, 0, 0.03); if (Math.random() < 0.4) this.burst(0.06, 4000, 0.04, 'highpass', 0.05); },
     coin() { this.tone(1320, 0.06, 'square', 0.05); this.tone(1760, 0.12, 'square', 0.05, 0, 0.07); },
     fail() { this.tone(330, 0.3, 'triangle', 0.12, -120); this.tone(250, 0.4, 'triangle', 0.1, -100, 0.18); },
     star(i) { this.tone(660 + i * 220, 0.4, 'triangle', 0.16); this.tone(990 + i * 330, 0.5, 'sine', 0.08, 0, 0.05); },

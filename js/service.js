@@ -60,9 +60,12 @@
       this.paused = false;
       this.events = [];
       this.tableBusy = new Set();
+      this.spots = Array(8).fill(null);
+      this.leaving = [];
+      this.chat = null; this.chatT = 0; this.saidFirst = false; this.clatterT = 2;
       // Sonderereignisse planen
       const d = night.dur;
-      if (night.mods.includes('rush')) this.events.push({ at: d * 0.48, fn: () => { this.callout('RUSH!', C.heat); for (let i = 0; i < 3; i++) this.spawn(); } });
+      if (night.mods.includes('rush')) this.events.push({ at: d * 0.48, fn: () => { this.callout('RUSH!', C.heat); this.say('rush'); for (let i = 0; i < 3; i++) this.spawn(); } });
       if (night.mods.includes('blogger')) this.events.push({ at: d * 0.3, fn: () => this.spawn({ table: 4, blogger: true }) });
       if (night.mods.includes('vip')) this.events.push({ at: d * 0.58, fn: () => this.spawn({ vip: true }) });
       if (night.boss) {
@@ -111,7 +114,9 @@
       this.rail = { x: pad, y: this.hud.y + this.hud.h + 10, w: w - pad * 2, h: railH };
       const passH = clamp(h * 0.2, 128 * U, 190 * U);
       this.pass = { x: pad, y: h - passH - 8, w: w - pad * 2, h: passH };
-      const top = this.rail.y + this.rail.h + 12, bot = this.pass.y - 12;
+      const diningH = clamp(h * 0.075, 40, 66 * U);
+      this.dining = { x: pad, y: this.rail.y + this.rail.h + 8, w: w - pad * 2, h: diningH };
+      const top = this.dining.y + this.dining.h + 10, bot = this.pass.y - 12;
       const n = this.stations.length, cols = 2, rows = Math.ceil(n / cols), gap = 10;
       const tileH = (bot - top - gap * (rows - 1)) / rows;
       const tileW = (w - pad * 2 - gap) / cols;
@@ -135,7 +140,17 @@
       this.tableBusy.add(table);
       const pat = nt.patience * (1 + 0.1 * this.up('lampen')) * (0.75 + 0.18 * dish.items.length) * (o.insp ? 1.1 : 1);
       const tk = { id: ++this.ticketSeq, table, dish, items: dish.items.map((id) => ({ id, done: false, cooking: false, q: 0 })), patience: pat, max: pat, born: this.t, bornRT: this.rt, slot: null, blogger: !!o.blogger, vip: !!o.vip, insp: !!o.insp, course: o.course || 0, plated: [] };
+      const pref = (table - 1) % 8;
+      const order = [pref, ...[0, 1, 2, 3, 4, 5, 6, 7].filter((x) => x !== pref)];
+      tk.spot = order.find((x) => this.spots[x] === null);
+      if (tk.spot !== undefined) this.spots[tk.spot] = tk.id; else tk.spot = null;
+      const tones = ['#f1c9a5', '#d9a47c', '#b47a55', '#8a5638', '#5e3a26'];
+      const cloth = ['#3f5d7a', '#7a3f4f', '#4f6b4a', '#6a5a8c', '#a0703a', '#2f4f4f', '#8c4a3a', '#c9b48a'];
+      tk.guests = Array.from({ length: o.insp ? 1 : Math.random() < 0.25 ? 1 : 2 }, () => ({ skin: pick(tones), cloth: pick(cloth), hair: pick(['#2b1d16', '#5a3a22', '#a8743b', '#d8b46a', '#8a8a8a', '#1b1b1b']), ph: rnd(0, 6) }));
       this.tickets.push(tk);
+      if (o.insp && o.course === 1) this.say('insp');
+      if (o.vip) this.say('brandt');
+      if (o.blogger) this.say('mira');
       this.sumValue += dish.value * (tk.blogger ? 2 : 1);
       G.Audio.printer();
       if (this.rail) this.pop(`Tisch ${table} – ça marche!`, this.w / 2, this.rail.y + this.rail.h + 14, o.insp ? C.gold : 'rgba(235,229,217,0.85)', 0.75);
@@ -176,7 +191,7 @@
       s.item = it.id; s.ticketId = t.id; s.p = 0; s.flipped = false; s.flipMissed = false;
       const k = s.def.kind;
       if (k === 'cold') { s.state = 'cutting'; s.cuts = 0; s.t0 = this.t; }
-      else if (k === 'temper') { s.state = 'tempering'; s.gauge = 0; s.prog = 0; s.outT = 0; s.holding = false; s.entered = false; }
+      else if (k === 'temper') { this.say('temper'); s.state = 'tempering'; s.gauge = 0; s.prog = 0; s.outT = 0; s.holding = false; s.entered = false; }
       else s.state = 'cooking';
       G.Audio.tap(); G.Audio.haptic(8);
       if (k === 'pan') { G.Audio.burst(0.4, 2400, 0.35, 'highpass'); for (let i = 0; i < 10; i++) this.part(s.r.x + s.r.w / 2, s.r.y + s.r.h * 0.45, 'spark'); }
@@ -282,6 +297,8 @@
       this.flyers.push({ serve: true, tkObj: tk, x0: slot.x, y0: slot.y, x1: this.w + 80, y1: slot.y - 120, t: 0 });
       this.tickets = this.tickets.filter((t) => t !== tk);
       this.tableBusy.delete(tk.table);
+      this.freeSpot(tk, true);
+      if (!this.saidFirst) { this.saidFirst = true; this.say('first'); }
       this.slots[tk.slot] = null;
       tk.slot = null;
       G.Audio.bell(); G.Audio.haptic(25);
@@ -289,15 +306,31 @@
       this.callout(word, q >= 88 ? C.gold : q >= 75 ? C.ink : C.muted, 1.1);
       this.pop(`+${pts}`, slot.x, slot.y - 40, C.gold, 1.3);
       if (this.combo >= 3) this.pop(`FLOW ×${this.combo}`, this.w / 2, this.rail.y + this.rail.h + 30, C.heat, 1.1);
+      if (this.combo === 5) this.say('flow');
       if (auto) this.pop('Souschef', slot.x, slot.y - 66, C.muted, 0.7);
       this.tutEvent('served');
+    }
+
+    freeSpot(tk, happy) {
+      if (tk.spot === null || tk.spot === undefined) return;
+      this.spots[tk.spot] = null;
+      this.leaving.push({ spot: tk.spot, guests: tk.guests, happy, t: 0, insp: tk.insp });
+    }
+
+    // Küchenfunk: Mo (oder Lina) ruft dazwischen
+    say(kind, vars = {}) {
+      const lines = G.CHATTER && G.CHATTER[kind];
+      if (!lines || (this.chat && this.rt - this.chat.at < 2.2 && kind !== 'insp')) return;
+      if (this.tut && this.tut.step < 9) return;
+      const [who, text] = pick(lines);
+      this.chat = { who, text: text.replace('{t}', vars.t ?? ''), at: this.rt };
     }
 
     /* ---------- Stress ---------- */
     addStress(v) {
       const k = v > 0 ? 1 - 0.2 * this.up('ruhe') : 1;
       this.stress = clamp(this.stress + v * k, 0, 100);
-      if (this.stress >= 100 && !this.weeds) { this.weeds = true; this.weedsT = 0; this.callout('IM WEEDS!', C.bad, 2); G.Audio.burn(); this.shake = 0.6; }
+      if (this.stress >= 100 && !this.weeds) { this.weeds = true; this.weedsT = 0; this.callout('IM WEEDS!', C.bad, 2); G.Audio.burn(); this.shake = 0.6; this.say('weeds'); }
       if (this.weeds && this.stress < 70) { this.weeds = false; this.callout('Wieder Luft.', C.good, 1.2); }
     }
 
@@ -472,7 +505,7 @@
       // Ereignisse
       this.events.forEach((ev) => { if (!ev.done && t >= ev.at) { ev.done = true; ev.fn(); } });
       // Neue Bons
-      if (!frozen && !this.lastCall && t >= nt.dur - 14 && !nt.legend) { this.lastCall = true; this.callout('Letzte Bestellungen!', C.gold, 1.6); }
+      if (!frozen && !this.lastCall && t >= nt.dur - 14 && !nt.legend) { this.lastCall = true; this.callout('Letzte Bestellungen!', C.gold, 1.6); this.say('last'); }
       if (!frozen && t < nt.dur - 14) {
         this.spawnT -= dt;
         const maxOpen = this.slots.length + 4;
@@ -486,7 +519,7 @@
       if (!frozen) {
         this.tickets.slice().forEach((tk) => {
           tk.patience -= dt * (this.weeds ? 1.35 : 1);
-          if (tk.patience < tk.max * 0.25 && !tk.warned) { tk.warned = true; this.pop(`Tisch ${tk.table} wird ungeduldig!`, this.w / 2, this.rail.y + this.rail.h + 18, C.heat, 0.85); }
+          if (tk.patience < tk.max * 0.25 && !tk.warned) { tk.warned = true; this.say('critical', { t: tk.table }); }
           if (tk.patience <= 0) this.lose(tk);
         });
       }
@@ -516,6 +549,7 @@
             this.addStress(13);
             this.shake = 0.45; this.flash = 0.5; this.flashCol = C.bad;
             this.pop('BRENNT!', cx, cy - 10, C.bad, 1.3);
+            this.say('burn');
             G.Audio.burn(); G.Audio.haptic([40, 30, 40]);
           }
         }
@@ -551,6 +585,12 @@
         else if (pl.phase === 'draw' && pl.t > 5 && !pl.drawing) { pl.score = 50; pl.phase = 'bell'; pl.t = 0; this.pop('Schnell, schnell!', this.w / 2, this.h * 0.2, C.muted); }
         else if (pl.phase === 'bell' && pl.t > 2.2 && !this.tut) { this.plating = null; this.serve(tk, pl.score); }
       }
+      // Atmosphäre: Klappern aus der Spüle, Gemurmel im Gastraum
+      this.clatterT -= dt;
+      if (this.clatterT <= 0) { G.Audio.clink && G.Audio.clink(); this.clatterT = rnd(2.2, 6) / (1 + this.tickets.length * 0.15); }
+      G.Audio.level('crowd', 0.02 + Math.min(0.06, this.tickets.length * 0.008));
+      this.leaving.forEach((l) => (l.t += dt));
+      this.leaving = this.leaving.filter((l) => l.t < 2.4);
       // Stress & Effekte
       this.stress = clamp(this.stress - dt * (this.tickets.some((x) => x.patience < x.max * 0.25) ? 0.2 : 1.1), 0, 100);
       if (this.weeds) { this.weedsT += dt; if (this.stress < 70) { this.weeds = false; this.callout('Wieder Luft.', C.good); } }
@@ -570,6 +610,8 @@
     lose(tk) {
       this.tickets = this.tickets.filter((t) => t !== tk);
       this.tableBusy.delete(tk.table);
+      this.freeSpot(tk, false);
+      this.say('lost', { t: tk.table });
       if (tk.slot !== null) this.slots[tk.slot] = null;
       tk.items.forEach((it) => (it.cooking = false));
       if (this.plating && this.plating.tk === tk.id) this.plating = null;
@@ -612,6 +654,7 @@
       if (this.shake > 0) c.translate(rnd(-1, 1) * this.shake * 14, rnd(-1, 1) * this.shake * 10);
       this.drawHud();
       this.drawRail();
+      this.drawDining();
       this.stations.forEach((s) => this.drawStation(s));
       this.drawPass();
       this.drawFlyers();
@@ -619,6 +662,7 @@
       c.restore();
       if (this.plating) this.drawPlating();
       this.drawPopups();
+      this.drawChat();
       this.drawTutorial();
       // Stress-Vignette
       const v = this.weeds ? 0.45 + Math.sin(this.t * 8) * 0.12 : this.stress / 260;
@@ -752,6 +796,106 @@
         c.font = font('callout', 15 * U); c.fillStyle = C.heat; c.textAlign = 'right';
         c.fillText(`+${tks.length - n} Bons`, r.x + r.w, r.y + r.h + 4 * U);
       }
+    }
+
+    drawDining() {
+      const c = this.ctx, U = this.U, d = this.dining;
+      const k = clamp(this.t / this.night.dur, 0, 1);
+      const mix = (a, b, t) => { const h = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)); const A = h(a), B = h(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; };
+      c.save();
+      this.rr(d.x, d.y, d.w, d.h, 10 * U); c.clip();
+      const wall = ['#5a2f24', '#4a3a26', '#1f3a2e', '#2e2236'][this.night.ch] || '#5a2f24';
+      const g = c.createLinearGradient(0, d.y, 0, d.y + d.h);
+      g.addColorStop(0, mix(wall, '#1a1416', k * 0.55)); g.addColorStop(1, '#120d0c');
+      c.fillStyle = g; c.fillRect(d.x, d.y, d.w, d.h);
+      // Fenster: Abendhimmel wird zur Nacht
+      for (let i = 0; i < 3; i++) {
+        const wx = d.x + d.w * (0.16 + i * 0.34), wy = d.y + 5, ww = d.w * 0.12, wh = d.h * 0.42;
+        const sky = c.createLinearGradient(0, wy, 0, wy + wh);
+        sky.addColorStop(0, mix('#e98a4a', '#0f1630', k)); sky.addColorStop(1, mix('#f2c46a', '#1d2a50', k));
+        c.fillStyle = sky; c.fillRect(wx, wy, ww, wh);
+        if (k > 0.5) { c.fillStyle = `rgba(255,255,255,${(k - 0.5) * 1.4})`; c.fillRect(wx + ww * 0.3, wy + wh * 0.3, 1.5, 1.5); c.fillRect(wx + ww * 0.7, wy + wh * 0.55, 1.2, 1.2); }
+        c.strokeStyle = '#2a1d16'; c.lineWidth = 2; c.strokeRect(wx, wy, ww, wh); c.beginPath(); c.moveTo(wx + ww / 2, wy); c.lineTo(wx + ww / 2, wy + wh); c.stroke();
+      }
+      const sw = d.w / 8, floorY = d.y + d.h * 0.8;
+      c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(d.x, floorY, d.w, d.h);
+      for (let i = 0; i < 8; i++) {
+        const x = d.x + sw * (i + 0.5);
+        const tk = this.spots[i] !== null ? this.ticket(this.spots[i]) : null;
+        // Pendelleuchte
+        const lg = c.createRadialGradient(x, d.y + 6, 1, x, floorY, d.h * 0.8);
+        lg.addColorStop(0, `rgba(255,190,110,${0.12 + k * 0.18 + (tk ? 0.08 : 0)})`); lg.addColorStop(1, 'rgba(255,190,110,0)');
+        c.fillStyle = lg; c.fillRect(x - sw / 2, d.y, sw, d.h);
+        // Gäste
+        const drawGuests = (guests, alpha, dx, happy, insp) => {
+          guests.forEach((gu, j) => {
+            const gx = x + dx + (guests.length === 1 ? 0 : (j ? 1 : -1) * sw * 0.26), gy = floorY - 2;
+            const bob = Math.sin(this.rt * 3 + gu.ph) * 0.8;
+            c.globalAlpha = alpha;
+            c.fillStyle = gu.cloth; this.rr(gx - 5 * U, gy - 13 * U + bob, 10 * U, 13 * U, 4 * U); c.fill();
+            c.fillStyle = gu.skin; c.beginPath(); c.arc(gx, gy - 17 * U + bob, 4.4 * U, 0, 7); c.fill();
+            c.fillStyle = gu.hair; c.beginPath(); c.arc(gx, gy - 18 * U + bob, 4.6 * U, Math.PI, 0); c.fill();
+            if (insp) { c.fillStyle = '#25272b'; c.fillRect(gx - 7 * U, gy - 21 * U + bob, 14 * U, 2 * U); c.fillRect(gx - 4 * U, gy - 26 * U + bob, 8 * U, 5 * U); c.fillStyle = '#f2ead9'; c.fillRect(gx + 5 * U, gy - 9 * U, 4 * U, 5 * U); }
+            c.globalAlpha = 1;
+          });
+          if (happy !== undefined && alpha > 0.2) { c.globalAlpha = alpha; c.font = font('callout', 14 * U); c.textAlign = 'center'; c.fillStyle = happy ? '#ff6b8a' : C.bad; c.fillText(happy ? '♥' : '×', x + dx, d.y + 14 * U); c.globalAlpha = 1; }
+        };
+        if (tk && tk.guests) {
+          drawGuests(tk.guests, 1, 0, undefined, tk.insp);
+          const pr = clamp(tk.patience / tk.max, 0, 1);
+          if (pr < 0.5) {
+            c.font = font('callout', (pr < 0.25 ? 15 : 12) * U); c.textAlign = 'center'; c.textBaseline = 'middle';
+            c.fillStyle = pr < 0.25 ? C.bad : 'rgba(235,229,217,0.7)';
+            c.fillText(pr < 0.25 ? '!' : '…', x + (pr < 0.25 ? Math.sin(this.rt * 20) * 1.5 : 0), d.y + 13 * U);
+          }
+        }
+        // Tisch mit Kerze
+        c.fillStyle = '#6b4a33'; c.fillRect(x - sw * 0.3, floorY - 4 * U, sw * 0.6, 4 * U);
+        c.fillStyle = '#f2ead9'; c.fillRect(x - 1, floorY - 8 * U, 2, 4 * U);
+        c.fillStyle = `rgba(255,180,70,${0.7 + Math.sin(this.rt * 11 + i) * 0.25})`; c.beginPath(); c.arc(x, floorY - 9 * U, 1.8 * U, 0, 7); c.fill();
+      }
+      // Gäste, die gehen
+      this.leaving.forEach((l) => {
+        const x0 = d.x + sw * (l.spot + 0.5);
+        const a = clamp(1 - l.t / 2.4, 0, 1);
+        const dx = l.t < 0.8 ? 0 : (l.t - 0.8) * sw * 1.4;
+        l.guests.forEach((gu, j) => {
+          const gx = x0 + dx + (l.guests.length === 1 ? 0 : (j ? 1 : -1) * sw * 0.26), gy = floorY - 2;
+          c.globalAlpha = a;
+          c.fillStyle = gu.cloth; this.rr(gx - 5 * U, gy - 13 * U, 10 * U, 13 * U, 4 * U); c.fill();
+          c.fillStyle = gu.skin; c.beginPath(); c.arc(gx, gy - 17 * U, 4.4 * U, 0, 7); c.fill();
+          c.globalAlpha = 1;
+        });
+        c.globalAlpha = a; c.font = font('callout', 15 * U); c.textAlign = 'center'; c.fillStyle = l.happy ? '#ff6b8a' : C.bad;
+        c.fillText(l.happy ? '♥' : '×', x0, d.y + 12 * U - l.t * 4); c.globalAlpha = 1;
+      });
+      c.restore();
+      c.strokeStyle = '#2b1e1a'; c.lineWidth = 2; this.rr(d.x, d.y, d.w, d.h, 10 * U); c.stroke();
+      c.font = font('mono', 8 * U); c.fillStyle = 'rgba(235,229,217,0.45)'; c.textAlign = 'right'; c.textBaseline = 'bottom';
+      c.fillText('GASTRAUM', d.x + d.w - 8, d.y + d.h - 3);
+    }
+
+    drawChat() {
+      const ch = this.chat;
+      if (!ch) return;
+      const age = this.rt - ch.at;
+      if (age > 2.8) { this.chat = null; return; }
+      const c = this.ctx, U = this.U;
+      const a = age < 0.15 ? age / 0.15 : age > 2.4 ? (2.8 - age) / 0.4 : 1;
+      const px = 14, py = this.pass.y - 50 * U;
+      c.save(); c.globalAlpha = a;
+      const pr = G.portrait ? G.portrait(ch.who, 0.6, 220) : null;
+      c.fillStyle = '#f3ead8'; c.beginPath(); c.arc(px + 22 * U, py + 20 * U, 22 * U, 0, 7); c.fill();
+      if (pr) { c.save(); c.beginPath(); c.arc(px + 22 * U, py + 20 * U, 21 * U, 0, 7); c.clip(); c.drawImage(pr, px - 4 * U, py - 6 * U, 52 * U, 52 * U * (260 / 220)); c.restore(); }
+      c.strokeStyle = '#2b1e1a'; c.lineWidth = 2.5; c.beginPath(); c.arc(px + 22 * U, py + 20 * U, 22 * U, 0, 7); c.stroke();
+      c.font = font('body', 13 * U);
+      const tw = Math.min(this.w - px - 70 * U, c.measureText(ch.text).width + 20 * U);
+      const bx = px + 50 * U, by = py + 4 * U, bh = 30 * U;
+      c.fillStyle = '#f3ead8'; this.rr(bx, by, tw, bh, 12 * U); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(bx + 2, by + bh * 0.4); c.lineTo(bx - 8 * U, by + bh * 0.55); c.lineTo(bx + 2, by + bh * 0.7); c.fill();
+      c.fillStyle = '#2a2520'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(ch.text, bx + 10 * U, by + bh / 2, tw - 16 * U);
+      c.restore();
     }
 
     drawStation(s) {

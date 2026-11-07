@@ -164,7 +164,16 @@
     },
 
     /* ---------- Briefing ---------- */
-    briefing(ch, i) {
+    briefing(ch, i, skipScene) {
+      const sk = `${ch}-${i}`;
+      this.save.seen = this.save.seen || {};
+      if (!skipScene && i < 90 && G.SCENES[sk] && !this.save.seen[sk]) {
+        this.save.seen[sk] = true;
+        this.persist();
+        const nt0 = G.night(ch, i);
+        G.Story.play(G.SCENES[sk], () => this.briefing(ch, i, true), { ch, kicker: `Kapitel ${ch + 1} · ${G.CHAPTERS[ch].name}`, title: nt0.boss ? 'Inspektoren-Abend' : nt0.title });
+        return;
+      }
       const legend = i === 99;
       const daily = i === 98;
       const nt = legend ? this.legendNight() : daily ? this.dailyNight() : G.night(ch, i);
@@ -180,13 +189,15 @@
           <div class="dishes">${[...new Set(nt.dishes)].map((d) => `<span class="dish-chip">${d.items.map((x) => `<i style="background:${G.ITEMS[x].col}"></i>`).join('')}${esc(d.name)}</span>`).join('')}</div>
           <span class="eyebrow">Linie</span>
           <div class="dishes">${nt.stations.map((sid) => `<span class="st-chip"><b>${G.STATIONS[sid].name}</b><small>${G.STATIONS[sid].hint}</small></span>`).join('')}</div>
-          <p class="sub">${best ? `Bestwert: ${best}` : 'Noch nie gekocht.'} · Service ca. ${Math.round(nt.dur / 60 * 10) / 10} Minuten</p>
+          <p class="sub">${best ? `Bestwert: ${best}` : 'Noch nie gekocht.'} · Service ca. ${Math.round(nt.dur / 60 * 10) / 10} Minuten${G.SCENES[`${ch}-${i}`] && !legend && !daily ? ' · <button type="button" class="linkish" id="scene">Szene nochmal</button>' : ''}</p>
           <div class="row">
             <button type="button" class="ghost-btn" id="back">Zurück</button>
             <button type="button" class="big-btn" id="start">Feuer frei!</button>
           </div>
         </div>`, 'briefing');
       el.querySelector('#back').onclick = () => this.map(ch);
+      const sc = el.querySelector('#scene');
+      if (sc) sc.onclick = () => G.Story.play(G.SCENES[`${ch}-${i}`], () => {}, { ch });
       el.querySelector('#start').onclick = () => { G.Audio.init(); this.play(nt, ch, i); };
     },
 
@@ -281,6 +292,7 @@
             <div><dt>Trinkgeld</dt><dd class="gold">+${eur(tips)}</dd></div>
           </dl>
           <blockquote>${review}</blockquote>
+          ${(() => { const pool = G.AFTER[shownStars]; const [who, mood, text] = pool[Math.floor(Math.random() * pool.length)]; return `<div class="after"><canvas class="after-face" data-who="${who}" data-mood="${mood}" width="120" height="120"></canvas><p><b style="color:${G.CAST[who].color}">${G.CAST[who].name}</b>${text}</p></div>`; })()}
           ${legend ? '' : `<p class="sub">Sterne bei ${res.th.join(' · ')} Punkten</p>`}
           ${unlockHint ? `<p class="unlock-hint">${unlockHint}</p>` : ''}
           <div class="row">
@@ -288,6 +300,8 @@
             <button type="button" class="big-btn" id="next">${awardNow ? 'Das Telefon klingelt …' : nextLabel}</button>
           </div>
         </div>`, 'resultscreen');
+      const face = el.querySelector('.after-face');
+      if (face) { const pr = G.portrait(face.dataset.who, +face.dataset.mood, 220); const fc = face.getContext('2d'); fc.fillStyle = '#f3ead8'; fc.fillRect(0, 0, 120, 120); fc.drawImage(pr, -10, -8, 140, 140 * 260 / 220); }
       // Hochzählen
       const cnt = el.querySelector('#cnt');
       const t0 = performance.now();
